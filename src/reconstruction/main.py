@@ -3,12 +3,12 @@ Main entry point for face reconstruction.
 """
 
 import argparse
+import sys
 from pathlib import Path
 
-from .face_reconstructor import FaceReconstructor
 
-
-def main():
+def build_parser() -> argparse.ArgumentParser:
+    """Build CLI parser for reconstruction runs."""
     parser = argparse.ArgumentParser(
         description="3D Face Reconstruction from single image"
     )
@@ -42,16 +42,51 @@ def main():
         default="glb",
         help="Output format"
     )
-    
+
+    parser.add_argument(
+        "--detail-level",
+        type=str,
+        choices=["low", "medium", "high"],
+        default="high",
+        help="Reconstruction detail level (reserved for real DECA backend)"
+    )
+
+    parser.add_argument(
+        "--mock",
+        action="store_true",
+        help="Force deterministic mock model instead of trying to load DECA"
+    )
+
+    parser.add_argument(
+        "--no-texture",
+        action="store_true",
+        help="Skip texture extraction/export"
+    )
+
+    return parser
+
+
+def main():
+    parser = build_parser()
     args = parser.parse_args()
+
+    from .face_reconstructor import FaceReconstructor
     
     # Initialize reconstructor
-    print(f"Initializing Face Reconstructor...")
-    reconstructor = FaceReconstructor(device=args.device)
-    
-    # Reconstruct
-    print(f"Reconstructing face from: {args.input}")
-    result = reconstructor.reconstruct(args.input)
+    print("Initializing Face Reconstructor...")
+    try:
+        reconstructor = FaceReconstructor(device=args.device, use_mock=args.mock)
+
+        # Reconstruct
+        print(f"Reconstructing face from: {args.input}")
+        result = reconstructor.reconstruct(
+            args.input,
+            with_texture=not args.no_texture,
+            detail_level=args.detail_level,
+        )
+    except Exception as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        raise SystemExit(1)
     
     # Export
     output_path = Path(args.output)

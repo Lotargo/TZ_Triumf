@@ -32,6 +32,9 @@ source .venv/bin/activate
 
 # Установка зависимостей
 pip install -e .
+
+# Для запуска тестов
+pip install -e ".[dev]"
 ```
 
 #### 3. Дополнительные зависимости для DECA
@@ -39,23 +42,23 @@ pip install -e .
 ```bash
 # Клонирование DECA
 git clone https://github.com/yfeng95/DECA.git
-cd DECA
+python -m gdown 1rp8kdyLPvErw2dTmqtjISRVvQLj6Yzje -O DECA/data/deca_model.tar
 
-# Установка
-pip install -r requirements.txt
+# FLAME2020 нужно скачать вручную после регистрации:
+# https://flame.is.tue.mpg.de/
+# Затем положить generic_model.pkl в DECA/data/generic_model.pkl
 
-# Скачивание предобученной модели
-bash models/download_models.sh
-
-cd ..
+# Современное окружение Python 3.12:
+pip install scikit-image yacs kornia ninja fvcore face-alignment
+pip install chumpy --no-build-isolation
 ```
+
+Подробности и статус интеграции: [`deca-integration.md`](deca-integration.md).
 
 #### 4. Веб-интерфейс (опционально)
 
 ```bash
-cd site
-npm install
-npm run dev
+python -m http.server 3000 -d site
 ```
 
 ## Запуск
@@ -66,12 +69,25 @@ npm run dev
 # Реконструкция одного изображения
 python -m src.reconstruction.main --input photo.jpg --output result.glb
 
+# Быстрая проверка без установленной DECA
+python -m src.reconstruction.main --input photo.jpg --output result.glb --mock --device cpu
+
+# Проверка реального DECA backend после установки FLAME asset
+python -m src.reconstruction.main \
+    --input DECA/TestSamples/examples/IMG_0392_inputs.jpg \
+    --output outputs/deca_result.glb \
+    --device cpu \
+    --no-texture
+
 # Реконструкция с настройками
 python -m src.reconstruction.main \
     --input photo.jpg \
     --output result.glb \
     --device cuda \
     --detail-level high
+
+# После установки пакета доступна короткая команда
+face-reconstruct --input photo.jpg --output result.glb --mock --device cpu
 ```
 
 ### Вариант 2: Python скрипт
@@ -95,9 +111,8 @@ print(f"Реконструкция завершена: {result.vertices.shape[0]
 ### Вариант 3: Веб-интерфейс
 
 ```bash
-# Запуск сервера
-cd site
-npm start
+# Запуск статического сервера
+python -m http.server 3000 -d site
 
 # Открыть в браузере
 # http://localhost:3000
@@ -179,9 +194,10 @@ TZ_Triumf/
 │   └── visualization/
 │       └── face_viewer.js
 ├── site/
-│   ├── node_modules/
 │   ├── index.html
-│   └── package.json
+│   ├── css/
+│   └── js/
+├── tests/
 ├── docs/
 ├── pyproject.toml
 └── README.md
@@ -193,13 +209,7 @@ TZ_Triumf/
 
 ```bash
 # Unit тесты
-pytest src/tests/
-
-# Интеграционные тесты
-pytest src/tests/integration/
-
-# Тестирование производительности
-python -m src.tests.benchmark
+pytest
 ```
 
 ### Проверка качества

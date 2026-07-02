@@ -9,11 +9,12 @@ from pathlib import Path
 from typing import Optional, Union
 
 import numpy as np
-import torch
 from PIL import Image
 
-from .preprocessor import FacePreprocessor
-from .postprocessor import MeshPostprocessor
+try:
+    import torch
+except ImportError:  # pragma: no cover - exercised only in minimal environments
+    torch = None
 
 
 class ReconstructionResult:
@@ -35,12 +36,14 @@ class ReconstructionResult:
         texture: Optional[np.ndarray] = None,
         landmarks: Optional[np.ndarray] = None,
         params: Optional[dict] = None,
+        normals: Optional[np.ndarray] = None,
     ):
         self.vertices = vertices
         self.faces = faces
         self.texture = texture
         self.landmarks = landmarks
         self.params = params or {}
+        self.normals = normals
     
     def to_obj(self, path: Union[str, Path]) -> None:
         """
@@ -65,7 +68,14 @@ class ReconstructionResult:
             
             # Write faces (1-indexed)
             for face in self.faces:
-                f.write(f"f {face[0]+1}/{face[0]+1} {face[1]+1}/{face[1]+1} {face[2]+1}/{face[2]+1}\n")
+                if self.texture is not None:
+                    f.write(
+                        f"f {face[0] + 1}/{face[0] + 1} "
+                        f"{face[1] + 1}/{face[1] + 1} "
+                        f"{face[2] + 1}/{face[2] + 1}\n"
+                    )
+                else:
+                    f.write(f"f {face[0] + 1} {face[1] + 1} {face[2] + 1}\n")
     
     def to_glb(self, path: Union[str, Path]) -> None:
         """
@@ -118,12 +128,10 @@ class ReconstructionResult:
         """Create simple UV mapping for texture."""
         # Simple planar projection
         uv = np.zeros((len(mesh.vertices), 2))
-        uv[:, 0] = (mesh.vertices[:, 0] - mesh.vertices[:, 0].min()) / (
-            mesh.vertices[:, 0].max() - mesh.vertices[:, 0].min()
-        )
-        uv[:, 1] = (mesh.vertices[:, 1] - mesh.vertices[:, 1].min()) / (
-            mesh.vertices[:, 1].max() - mesh.vertices[:, 1].min()
-        )
+        x_range = mesh.vertices[:, 0].max() - mesh.vertices[:, 0].min()
+        y_range = mesh.vertices[:, 1].max() - mesh.vertices[:, 1].min()
+        uv[:, 0] = (mesh.vertices[:, 0] - mesh.vertices[:, 0].min()) / max(x_range, 1e-8)
+        uv[:, 1] = (mesh.vertices[:, 1] - mesh.vertices[:, 1].min()) / max(y_range, 1e-8)
         return uv
     
     @property
@@ -160,6 +168,7 @@ class FaceReconstructor:
         self,
         device: Optional[str] = None,
         model_path: Optional[str] = None,
+        use_mock: bool = False,
     ):
         """
         Initialize face reconstructor.
@@ -168,15 +177,25 @@ class FaceReconstructor:
             device: Device for inference ('cuda' or 'cpu')
             model_path: Path to pre-trained DECA model
         """
+        if torch is None:
+            raise ImportError(
+                "PyTorch is required for reconstruction. "
+                "Install the project dependencies with `pip install -e .`."
+            )
+
+        from .postprocessor import MeshPostprocessor
+        from .preprocessor import FacePreprocessor
+
         # Auto-detect device
         if device is None:
             device = "cuda" if torch.cuda.is_available() else "cpu"
         
         self.device = torch.device(device)
         self.model_path = model_path
+        self.use_mock = use_mock
         
         # Initialize components
-        self.preprocessor = FacePreprocessor()
+        self.preprocessor = FacePreprocessor(device=str(self.device))
         self.postprocessor = MeshPostprocessor()
         
         # Load model
@@ -189,10 +208,17 @@ class FaceReconstructor:
         Returns:
             Loaded DECA model
         """
+        if self.use_mock:
+            print("Using mock model for reproducible local demo.")
+            return MockDECA()
+
         try:
             # Try to import DECA
             import sys
-            sys.path.append(str(Path(__file__).parent.parent.parent / "DECA"))
+            deca_root = Path(__file__).parent.parent.parent / "DECA"
+            sys.path.append(str(deca_root))
+
+            self._validate_deca_assets(deca_root)
             
             from decalib.deca import DECA
             from decalib.utils.config import cfg as deca_cfg
@@ -208,9 +234,36 @@ class FaceReconstructor:
             
             return deca
             
-        except ImportError:
-            print("DECA not found. Using mock model for demonstration.")
-            return MockDECA()
+        except Exception as exc:
+            raise RuntimeError(
+                "DECA backend is unavailable. Install DECA dependencies and required model assets, "
+                f"or run with `--mock` for the deterministic local demo.\nReason: {exc}"
+            ) from exc
+
+    def _validate_deca_assets(self, deca_root: Path) -> None:
+        """Fail early with actionable guidance when DECA assets are missing."""
+        if not deca_root.exists():
+            raise FileNotFoundError(
+                f"DECA repository was not found at {deca_root}. "
+                "Clone it with `git clone https://github.com/yfeng95/DECA.git DECA`."
+            )
+
+        required_assets = {
+            deca_root / "data" / "deca_model.tar": (
+                "Download the released DECA checkpoint with "
+                "`python -m gdown 1rp8kdyLPvErw2dTmqtjISRVvQLj6Yzje -O DECA/data/deca_model.tar`."
+            ),
+            deca_root / "data" / "generic_model.pkl": (
+                "Download FLAME2020 from https://flame.is.tue.mpg.de/ after registration, "
+                "accept the license, and copy `generic_model.pkl` to `DECA/data/generic_model.pkl`."
+            ),
+        }
+
+        missing = [
+            f"{path}: {hint}" for path, hint in required_assets.items() if not path.exists()
+        ]
+        if missing:
+            raise FileNotFoundError("Missing DECA assets:\n" + "\n".join(missing))
     
     def reconstruct(
         self,
@@ -260,6 +313,8 @@ class FaceReconstructor:
             else:
                 # Mock model for demonstration
                 vertices, faces, texture = self.model.reconstruct(input_tensor)
+                if not with_texture:
+                    texture = None
                 params = {}
         
         # Postprocess

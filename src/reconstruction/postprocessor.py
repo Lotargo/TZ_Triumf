@@ -68,6 +68,7 @@ class MeshPostprocessor:
             texture=result.texture,
             landmarks=result.landmarks,
             params=result.params,
+            normals=normals,
         )
         
         return processed
