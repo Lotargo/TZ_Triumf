@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Face Reconstruction | TZ Triumf</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <!-- Header -->
+    <header class="header">
+        <div class="container">
+            <h1>3D Face Reconstruction</h1>
+            <p class="subtitle">Аналитический обзор и стратегия реконструкции лица по фото</p>
+            <p class="author">Boiko Oleg | 2026</p>
+        </div>
+    </header>
+
+    <!-- Navigation -->
+    <nav class="nav">
+        <div class="container">
+            <ul>
+                <li><a href="#overview">Обзор</a></li>
+                <li><a href="#research">Исследование</a></li>
+                <li><a href="#practical">Практика</a></li>
+                <li><a href="#visualization">3D Визуализация</a></li>
+                <li><a href="#download">Скачать</a></li>
+            </ul>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="main">
+        <!-- Overview Section -->
+        <section id="overview" class="section">
+            <div class="container">
+                <h2>Обзор проекта</h2>
+                <div class="content">
+                    <p>Данный проект представляет собой аналитический обзор современных методов 3D-реконструкции лица по фотографиям и практическую реализацию пайплайна с использованием предобученных нейросетевых моделей.</p>
+                    
+                    <div class="features">
+                        <div class="feature">
+                            <h3>Исследование</h3>
+                            <p>Глубокий анализ 7 ключевых направлений в 3D-реконструкции лица</p>
+                        </div>
+                        <div class="feature">
+                            <h3>Практика</h3>
+                            <p>Реализация на Python с использованием DECA/EMOCA моделей</p>
+                        </div>
+                        <div class="feature">
+                            <h3>Визуализация</h3>
+                            <p>Интерактивный 3D-просмотр через Three.js</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Research Section -->
+        <section id="research" class="section alt">
+            <div class="container">
+                <h2>Исследовательские материалы</h2>
+                <div class="docs-grid">
+                    <div class="doc-card">
+                        <h3>01 - Обзор методов</h3>
+                        <p>Классификация и сравнение подходов к 3D-реконструкции</p>
+                        <a href="docs/research/01-overview.md" class="btn-download" download>Скачать MD</a>
+                    </div>
+                    <div class="doc-card">
+                        <h3>02 - 3D Morphable Models</h3>
+                        <p>Параметрические модели лица (3DMM, FLAME)</p>
+                        <a href="docs/research/02-3dmm.md" class="btn-download" download>Скачать MD</a>
+                    </div>
+                    <div class="doc-card">
+                        <h3>03 - NeRF</h3>
+                        <p>Нейросетевые радиационные поля</p>
+                        <a href="docs/research/03-nerf.md" class="btn-download" download>Скачать MD</a>
+                    </div>
+                    <div class="doc-card">
+                        <h3>04 - Deep Learning</h3>
+                        <p>DECA, EMOCA, MICA модели</p>
+                        <a href="docs/research/04-deep-learning.md" class="btn-download" download>Скачать MD</a>
+                    </div>
+                    <div class="doc-card">
+                        <h3>05 - Фотограмметрия</h3>
+                        <p>Многовидовая реконструкция</p>
+                        <a href="docs/research/05-photogrammetry.md" class="btn-download" download>Скачать MD</a>
+                    </div>
+                    <div class="doc-card">
+                        <h3>06 - Domain Gap</h3>
+                        <p>Проблема разрыва доменов</p>
+                        <a href="docs/research/06-domain-gap.md" class="btn-download" download>Скачать MD</a>
+                    </div>
+                    <div class="doc-card">
+                        <h3>07 - Сравнение</h3>
+                        <p>Сравнительный анализ методов</p>
+                        <a href="docs/research/07-comparison.md" class="btn-download" download>Скачать MD</a>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Practical Section -->
+        <section id="practical" class="section">
+            <div class="container">
+                <h2>Практическая часть</h2>
+                <div class="content">
+                    <div class="practical-info">
+                        <div class="info-block">
+                            <h3>Архитектура</h3>
+                            <p>Модульная система с четким разделением ответственности</p>
+                            <a href="docs/practical/architecture.md" class="btn-download" download>Скачать MD</a>
+                        </div>
+                        <div class="info-block">
+                            <h3>Настройка</h3>
+                            <p>Инструкция по установке и запуску</p>
+                            <a href="docs/practical/setup.md" class="btn-download" download>Скачать MD</a>
+                        </div>
+                        <div class="info-block">
+                            <h3>pyproject.toml</h3>
+                            <p>Конфигурация Python-проекта (PEP 621)</p>
+                            <a href="pyproject.toml" class="btn-download" download>Скачать TOML</a>
+                        </div>
+                    </div>
+                    
+                    <div class="tech-stack">
+                        <h3>Технологический стек</h3>
+                        <ul>
+                            <li><strong>Python 3.10+</strong> - основной язык</li>
+                            <li><strong>PyTorch</strong> - фреймворк для ML</li>
+                            <li><strong>DECA/EMOCA</strong> - предобученные модели</li>
+                            <li><strong>OpenCV</strong> - предобработка изображений</li>
+                            <li><strong>Three.js</strong> - 3D визуализация</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Visualization Section -->
+        <section id="visualization" class="section alt">
+            <div class="container">
+                <h2>3D Визуализация</h2>
+                <div class="viz-container">
+                    <div class="viewer-container">
+                        <div id="viewer-3d" class="viewer-3d">
+                            <div class="placeholder">
+                                <p>Загрузите 3D-модель для просмотра</p>
+                            </div>
+                        </div>
+                        <div class="viewer-controls">
+                            <button id="btn-load" class="btn">Загрузить модель</button>
+                            <button id="btn-reset" class="btn">Сбросить</button>
+                            <input type="file" id="file-input" accept=".glb,.gltf" hidden>
+                        </div>
+                    </div>
+                    <div class="viz-info">
+                        <h3>Управление</h3>
+                        <ul>
+                            <li><strong>Вращение:</strong> Левая кнопка + перетаскивание</li>
+                            <li><strong>Масштаб:</strong> Колёсико мыши</li>
+                            <li><strong>Панорамирование:</strong> Правая кнопка + перетаскивание</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Download Section -->
+        <section id="download" class="section">
+            <div class="container">
+                <h2>Скачать проект</h2>
+                <div class="download-options">
+                    <div class="download-card">
+                        <h3>Полный отчёт (PDF)</h3>
+                        <p>Вся документация в одном файле</p>
+                        <button id="btn-pdf" class="btn btn-primary">Скачать PDF</button>
+                    </div>
+                    <div class="download-card">
+                        <h3>Исходный код</h3>
+                        <p>GitHub репозиторий</p>
+                        <a href="https://github.com/BoikoOleg/TZ_Triumf" class="btn">GitHub</a>
+                    </div>
+                    <div class="download-card">
+                        <h3>Отдельные MD</h3>
+                        <p>Скачать все документы</p>
+                        <button id="btn-all-md" class="btn">Скачать все MD</button>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="container">
+            <p>&copy; 2026 Boiko Oleg. MIT License.</p>
+        </div>
+    </footer>
+
+    <!-- Scripts -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+    <script src="js/viewer.js"></script>
+    <script src="js/export.js"></script>
+    <script src="js/main.js"></script>
+</body>
+</html>
