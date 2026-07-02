@@ -8,3 +8,4 @@ __pycache__/
 DECA/
 *.egg-info/
 build/
+.playwright-mcp
