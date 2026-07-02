@@ -37,16 +37,22 @@ pip install -e .
 pip install -e ".[dev]"
 ```
 
-#### 3. Дополнительные зависимости для DECA
+#### 3. FLAME модели
+
+Модели FLAME 2020/2023 нужно скачать вручную после регистрации на
+[flame.is.tue.mpg.de](https://flame.is.tue.mpg.de/) и разместить в `DECA/data/`:
+
+- `generic_model.pkl` (FLAME2020) — обязателен для DECA
+- `flame2023_Open.pkl` (FLAME2023 Open, CC-BY-4.0)
+- `flame2023.pkl` (FLAME2023)
+- `FLAME_masks.pkl`
+
+#### 4. Дополнительные зависимости для DECA
 
 ```bash
 # Клонирование DECA
 git clone https://github.com/yfeng95/DECA.git
 python -m gdown 1rp8kdyLPvErw2dTmqtjISRVvQLj6Yzje -O DECA/data/deca_model.tar
-
-# FLAME2020 нужно скачать вручную после регистрации:
-# https://flame.is.tue.mpg.de/
-# Затем положить generic_model.pkl в DECA/data/generic_model.pkl
 
 # Современное окружение Python 3.12:
 pip install scikit-image yacs kornia ninja fvcore face-alignment
@@ -85,6 +91,12 @@ python -m src.reconstruction.main \
     --output result.glb \
     --device cuda \
     --detail-level high
+
+# Использование FLAME2023 Open (для альтернативных бэкендов)
+python -m src.reconstruction.main \
+    --input photo.jpg \
+    --output result.glb \
+    --flame-model flame2023_Open
 
 # После установки пакета доступна короткая команда
 face-reconstruct --input photo.jpg --output result.glb --mock --device cpu

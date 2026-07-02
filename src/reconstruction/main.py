@@ -52,6 +52,15 @@ def build_parser() -> argparse.ArgumentParser:
     )
 
     parser.add_argument(
+        "--flame-model",
+        type=str,
+        choices=["FLAME2020", "flame2023", "flame2023_Open"],
+        default="FLAME2020",
+        help="FLAME model variant. DECA requires FLAME2020 (default). "
+             "FLAME2023 models are for alternative backends."
+    )
+
+    parser.add_argument(
         "--mock",
         action="store_true",
         help="Force deterministic mock model instead of trying to load DECA"
@@ -75,7 +84,11 @@ def main():
     # Initialize reconstructor
     print("Initializing Face Reconstructor...")
     try:
-        reconstructor = FaceReconstructor(device=args.device, use_mock=args.mock)
+        reconstructor = FaceReconstructor(
+            device=args.device,
+            use_mock=args.mock,
+            flame_model=args.flame_model,
+        )
 
         # Reconstruct
         print(f"Reconstructing face from: {args.input}")
