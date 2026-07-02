@@ -16,8 +16,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--input", "-i",
         type=str,
-        required=True,
-        help="Path to input image"
+        default=None,
+        help="Path to input image. Required for FLAME2020/DECA reconstruction."
     )
     
     parser.add_argument(
@@ -72,6 +72,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="Skip texture extraction/export"
     )
 
+    parser.add_argument(
+        "--generate",
+        action="store_true",
+        help="Generate a neutral parametric FLAME mesh instead of reconstructing from an image"
+    )
+
     return parser
 
 
@@ -90,13 +96,20 @@ def main():
             flame_model=args.flame_model,
         )
 
-        # Reconstruct
-        print(f"Reconstructing face from: {args.input}")
-        result = reconstructor.reconstruct(
-            args.input,
-            with_texture=not args.no_texture,
-            detail_level=args.detail_level,
-        )
+        should_generate = args.generate or args.flame_model != "FLAME2020"
+        if should_generate:
+            print(f"Generating neutral mesh with: {args.flame_model}")
+            result = reconstructor.generate(with_texture=not args.no_texture)
+        else:
+            if args.input is None:
+                parser.error("--input is required for FLAME2020/DECA reconstruction")
+
+            print(f"Reconstructing face from: {args.input}")
+            result = reconstructor.reconstruct(
+                args.input,
+                with_texture=not args.no_texture,
+                detail_level=args.detail_level,
+            )
     except Exception as exc:
         print(f"Error: {exc}", file=sys.stderr)
         raise SystemExit(1)

@@ -72,6 +72,7 @@
 Страница в `site/index.html` — это не промо-лендинг, а компактный веб-отчет для работодателя:
 
 - краткое executive summary;
+- интерактивное WebGL-демо с GLB-моделями;
 - сравнительная таблица методов;
 - выбранная стратегия;
 - риски domain gap;
@@ -79,6 +80,18 @@
 - экспорт основной версии в PDF через печать браузера.
 
 Для GitHub Pages добавлен корневой `index.html`, который открывает `site/`.
+
+Локальный запуск:
+
+```bash
+python -m http.server 3000 -d site
+```
+
+Затем открыть `http://localhost:3000/#demo`. В демо доступны:
+
+- `FLAME neutral` — нейтральная FLAME2023-голова для проверки топологии и масштаба
+- `FLAME textured` — FLAME2023 Open с UV/mean texture из `FLAME_texture.npz`
+- `DECA result` — GLB, полученный из sample-фото через DECA mesh-only CPU pipeline
 
 ## Практическая часть
 
@@ -98,6 +111,8 @@
 
 - **Python** — основной язык для машинного обучения
 - **PyTorch** — фреймворк для инференса нейросетевых моделей
+- **CUDA GPU + PyTorch3D** — целевое окружение для полноценного DECA-рендера,
+  корректного rasterization pipeline, texture extraction и detail-normal этапов
 - **Flame2023Decoder** — собственный LBS-декодер (без DECA/chumpy)
 - **DECA/EMOCA/MICA** — предобученные модели для image-based реконструкции
 - **FLAME 2023** — параметрическая модель головы (.pkl, ~50 MB)
@@ -141,9 +156,118 @@ TZ_Triumf/
 4. **Два режима** — DECA (encode→decode по фото) и FLAME2023 (параметрическая генерация)
 5. **Взаимоисключающие гарды** — `reconstruct()` и `generate()` бросают понятные ошибки
    при неверном типе модели
-6. **Демонстрационный режим** — `--mock` позволяет проверить пайплайн без весов
-7. **Интерактивность** — Three.js позволяет вращать, масштабировать модель
-8. **Экспорт** — поддержка PDF, Markdown-документов и 3D-форматов OBJ/GLB/PLY
+6. **Загрузка FLAME2020** — `python -m src.reconstruction.download_assets flame2020`
+   скачивает `generic_model.pkl` из Hugging Face-зеркала и проверяет SHA256
+7. **DECA mesh-only на CPU** — image-to-mesh работает без PyTorch3D: renderer
+   отключается, если зависимость недоступна
+8. **UV-текстурирование FLAME** — `FLAME_texture.npz` подключается к
+   `generate()` как mean texture + `vt`/`ft`, OBJ пишет корректные `v/vt`, а GLB
+   экспортируется с `TextureVisuals`
+9. **Демонстрационный режим** — `--mock` позволяет проверить пайплайн без весов
+10. **Интерактивность** — Three.js позволяет вращать, масштабировать модель
+11. **Экспорт** — поддержка PDF, Markdown-документов и 3D-форматов OBJ/GLB/PLY
+
+---
+
+## Текущие ограничения практической части
+
+Практическая часть уже демонстрирует загрузку моделей, генерацию GLB и WebGL preview,
+но текущий результат **нельзя считать финальным качеством реконструкции лица**.
+
+### Проблемы геометрии DECA
+
+`DECA result` в веб-демо сейчас является smoke-test артефактом: он подтверждает,
+что checkpoint загружается, входное фото проходит encode/decode, а меш экспортируется
+в GLB и открывается в Three.js. Однако визуально геометрия выглядит некорректно:
+
+- форма не похожа на цельную голову/лицо;
+- видны крупные разрывы и лоскутные треугольники;
+- mesh-only fallback без PyTorch3D отключает renderer, detail normals,
+  texture extraction и часть штатной логики DECA;
+- текущий постпроцессинг со сглаживанием по порядку массива вершин может портить
+  топологию, потому что индекс вершины не является пространственной координатой;
+- требуется проверить соответствие `verts` и `faces`: нельзя смешивать vertices
+  из одного FLAME/DECA контура с faces/UV из другого шаблона.
+
+Вывод: DECA на CPU в текущей конфигурации годится как проверка интеграции, но не
+как качественный результат 3D-реконструкции.
+
+### Проблемы текстуры
+
+`FLAME textured` использует mean texture из `FLAME_texture.npz`, а не текстуру,
+восстановленную с пользовательского фото. Поэтому она показывает только то, что
+UV/texture export технически работает. Это не персонализированная текстура лица.
+
+Для реального результата нужно:
+
+- запускать DECA с корректной albedo/texture моделью;
+- получать `tex_image`/UV texture через штатный DECA renderer;
+- либо проектировать цвет исходного фото на FLAME UV с контролем видимости,
+  окклюзий и швов;
+- отдельно валидировать `vt`/`ft`, orientation UV и соответствие texture space
+  конкретной версии FLAME.
+
+### Требование к GPU
+
+Следующий этап должен выполняться в GPU-окружении. Для DECA это не просто
+ускорение: официальный pipeline использует differentiable rendering и зависит от
+PyTorch3D/renderer-логики. CPU mesh-only fallback помогает отладить загрузку
+моделей, но не заменяет полноценный reconstruction path.
+
+Минимальная цель для следующего окружения:
+
+- NVIDIA GPU с CUDA;
+- совместимые версии `torch`, `torchvision`, `pytorch3d`;
+- запуск официального DECA demo без отключения renderer;
+- проверка rasterizer type (`pytorch3d` или `standard`) по официальным гайдам;
+- сохранение OBJ/GLB с корректными `verts`, `faces`, `vt`, `ft`, normals и texture.
+
+---
+
+## План исследования FLAME/DECA-настроек
+
+Перед дальнейшей доработкой нужно сверить реализацию с первичными источниками и
+гайдами, а не подбирать параметры на глаз.
+
+### Что проверить по официальным материалам
+
+1. **DECA official implementation** — как авторы вызывают `encode`, `decode`,
+   `save_obj`, `rendering`, `use_detail`, `rasterizer_type`; какие версии PyTorch,
+   PyTorch3D и assets предполагаются.
+2. **FLAME official model** — какие параметры отвечают за shape, expression, pose,
+   jaw, neck, eyeballs; как устроены blendshapes, LBS и topology.
+3. **FLAME_PyTorch / TF_FLAME / flame-fitting** — как правильно загружать
+   `generic_model.pkl`, landmark embeddings и texture space; как авторы
+   сопоставляют `vertices`, `faces`, `uvcoords`, `uvfaces`.
+4. **PyTorch3D textured rendering** — как формируются `Meshes`, textures, cameras,
+   lights и rasterization settings для корректного рендера.
+5. **DECA/FLAME papers** — какие ограничения у монокулярной реконструкции,
+   как DECA разделяет coarse shape, expression-dependent wrinkles и
+   person-specific details.
+
+### Первичные источники для проверки
+
+- DECA official repository: https://github.com/yfeng95/DECA
+- DECA project page: https://deca.is.tue.mpg.de/
+- DECA paper: https://arxiv.org/abs/2012.04012
+- FLAME official site: https://flame.is.tue.mpg.de/
+- FLAME paper: https://dl.acm.org/doi/10.1145/3130800.3130813
+- Official FLAME fitting repository: https://github.com/Rubikplayer/flame-fitting
+- TF_FLAME: https://github.com/TimoBolkart/TF_FLAME
+- FLAME_PyTorch: https://github.com/soubhiksanyal/FLAME_PyTorch
+- PyTorch3D textured mesh tutorial: https://pytorch3d.org/tutorials/render_textured_meshes
+
+### Практические проверки после исследования
+
+- отключить небезопасное Gaussian smoothing по порядку вершин;
+- экспортировать raw DECA OBJ через официальный `save_obj` и сравнить с нашим GLB;
+- сравнить `faces` из DECA renderer, FLAME template и `head_template.obj`;
+- проверить, что `generic_model.pkl`, `landmark_embedding.npy`,
+  `FLAME_texture.npz`, masks и albedo files относятся к совместимым версиям;
+- запустить DECA с `rendering=True`, `return_vis=True`, `use_detail=True`
+  на GPU и сравнить геометрию/текстуру с CPU mesh-only результатом;
+- добавить автоматическую mesh sanity-check: bounds, connected components,
+  degenerate faces, normal consistency, vertex/face count, texture coordinate count.
 
 ---
 
@@ -156,12 +280,28 @@ TZ_Triumf/
 - **FLAME2023** — параметрическая генерация меша через собственный `Flame2023Decoder`
   (использует скачанный `.pkl`, никаких дополнительных весов не нужно)
 
-CLI принимает документированные параметры, экспортирует валидные 3D-артефакты и
-покрыт тестами (15 тестов декодера, интеграционные smoke-тесты).
+CLI принимает документированные параметры, умеет запускать FLAME2023-генерацию
+без входного фото, экспортирует валидные 3D-артефакты и покрыт тестами
+(16 тестов декодера и генерации, интеграционные smoke-тесты).
+
+Проверенный CPU-запуск DECA без рендера:
+
+```bash
+python -m src.reconstruction.download_assets flame2020
+python -m src.reconstruction.main \
+  --input DECA/TestSamples/examples/IMG_0392_inputs.jpg \
+  --output outputs/deca_result.glb \
+  --device cpu \
+  --no-texture
+```
 
 ### Дальнейшие шаги
 
-- UV-текстурирование: привязать FLAME_texture.npz к выходу декодера
+- Сверить пайплайн с официальными DECA/FLAME источниками и гайдами
+- Подготовить GPU/CUDA окружение с PyTorch3D
+- Исправить DECA geometry path: raw export, faces/verts/UV compatibility,
+  отключение некорректного smoothing
+- Проекционное текстурирование: переносить цвет с пользовательского фото на UV-карту
 - Браузерный просмотрщик: связать загрузку фото → реконструкцию → Three.js preview
 - API-слой: REST/WebSocket обёртка для серверного инференса
 - Оптимизация для CPU-инференса (ONNX / quantization)

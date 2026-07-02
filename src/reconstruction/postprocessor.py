@@ -55,8 +55,11 @@ class MeshPostprocessor:
         vertices = self._smooth_vertices(vertices)
         
         # Remove degenerate faces
+        uv_faces = result.uv_faces
         if self.remove_degenerate:
-            vertices, faces = self._remove_degenerate(vertices, faces)
+            vertices, faces, valid_mask = self._remove_degenerate(vertices, faces)
+            if uv_faces is not None:
+                uv_faces = uv_faces[valid_mask]
         
         # Compute normals
         normals = self._compute_normals(vertices, faces)
@@ -66,6 +69,8 @@ class MeshPostprocessor:
             vertices=vertices,
             faces=faces,
             texture=result.texture,
+            uv=result.uv,
+            uv_faces=uv_faces,
             landmarks=result.landmarks,
             params=result.params,
             normals=normals,
@@ -124,7 +129,7 @@ class MeshPostprocessor:
         valid_mask = areas > 1e-8
         faces = faces[valid_mask]
         
-        return vertices, faces
+        return vertices, faces, valid_mask
     
     def _compute_normals(
         self,

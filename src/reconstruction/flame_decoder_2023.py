@@ -184,6 +184,27 @@ def _to_tensor(arr: np.ndarray, dtype: torch.dtype = torch.float32) -> torch.Ten
     return torch.tensor(arr, dtype=dtype)
 
 
+def _install_legacy_pickle_shims() -> None:
+    """Provide aliases needed by legacy chumpy FLAME pickles on Python 3.12."""
+    import inspect
+
+    if not hasattr(inspect, "getargspec"):
+        inspect.getargspec = inspect.getfullargspec
+
+    aliases = {
+        "bool": bool,
+        "int": int,
+        "float": float,
+        "complex": complex,
+        "object": object,
+        "unicode": str,
+        "str": str,
+    }
+    for name, value in aliases.items():
+        if name not in np.__dict__:
+            setattr(np, name, value)
+
+
 class Flame2023Decoder(nn.Module):
     """PyTorch FLAME 2023 decoder — no chumpy dependency.
 
@@ -222,7 +243,9 @@ class Flame2023Decoder(nn.Module):
                 "Download from https://flame.is.tue.mpg.de/ after registration."
             )
 
-        # Load .pkl — plain pickle, no chumpy
+        # FLAME2023 Open is plain pickle; the full registered release may
+        # contain legacy chumpy objects that expect removed Python/NumPy aliases.
+        _install_legacy_pickle_shims()
         import pickle
 
         with open(model_path, "rb") as f:

@@ -228,6 +228,33 @@ class TestFaceReconstructorGenerate:
         assert result.vertices.shape == (100, 3)
         assert result.faces.shape == (2, 3)
 
+    def test_generate_with_flame2023_attaches_uv_texture(self, mock_model_path, monkeypatch):
+        """FLAME generation can attach texture and UV data for export."""
+        monkeypatch.setattr(
+            "src.reconstruction.face_reconstructor.FaceReconstructor._load_flame2023_model",
+            lambda self: __import__(
+                "src.reconstruction.flame_decoder_2023", fromlist=["Flame2023Decoder"]
+            ).Flame2023Decoder(
+                str(mock_model_path), n_shape=MOCK_N_SHAPE, n_exp=MOCK_N_EXP
+            ),
+        )
+        monkeypatch.setattr(
+            "src.reconstruction.face_reconstructor.FaceReconstructor._load_flame_texture",
+            lambda self: (
+                np.zeros((4, 4, 3), dtype=np.uint8),
+                np.zeros((4, 2), dtype=np.float32),
+                np.array([[0, 1, 2], [1, 2, 3]], dtype=np.int64),
+            ),
+        )
+        from src.reconstruction.face_reconstructor import FaceReconstructor
+
+        rec = FaceReconstructor(use_mock=False, flame_model="flame2023_Open")
+        result = rec.generate(with_texture=True)
+
+        assert result.texture.shape == (4, 4, 3)
+        assert result.uv.shape == (4, 2)
+        assert result.uv_faces.shape == (2, 3)
+
     def test_generate_raises_on_deca(self, monkeypatch):
         """generate() raises RuntimeError when a DECA-like encoder is loaded."""
         class _MockEncoderModel:

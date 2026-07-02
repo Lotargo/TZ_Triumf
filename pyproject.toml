@@ -38,6 +38,7 @@ dependencies = [
 
 [project.scripts]
 face-reconstruct = "src.reconstruction.main:main"
+download-reconstruction-assets = "src.reconstruction.download_assets:main"
 
 [project.optional-dependencies]
 dev = [

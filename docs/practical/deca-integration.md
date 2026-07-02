@@ -11,11 +11,13 @@ DECA подключается как внешний каталог `DECA/` в к
 - исходный код DECA скачан из `https://github.com/yfeng95/DECA`;
 - публичный checkpoint `data/deca_model.tar` скачан через Google Drive;
 - Python-зависимости для запуска DECA установлены;
-- запуск доходит до инициализации FLAME decoder;
-- дальнейший запуск требует `data/generic_model.pkl`.
+- `data/generic_model.pkl` можно скачать через `src.reconstruction.download_assets`
+  из Hugging Face-зеркала с проверкой SHA256.
+- CPU image-to-mesh запуск проверен в mesh-only режиме без PyTorch3D:
+  `outputs/deca_result.glb` создаётся из `DECA/TestSamples/examples/IMG_0392_inputs.jpg`.
 
 `generic_model.pkl` относится к FLAME2020 и не должен распространяться в
-репозитории. Его нужно скачать после регистрации и принятия лицензии на сайте FLAME.
+репозитории. Перед использованием нужно учитывать лицензионные условия FLAME.
 
 ## Модели FLAME
 
@@ -43,41 +45,45 @@ git clone --depth 1 https://github.com/yfeng95/DECA.git DECA
 python -m gdown 1rp8kdyLPvErw2dTmqtjISRVvQLj6Yzje -O DECA/data/deca_model.tar
 ```
 
-FLAME модели (generic_model.pkl, flame2023.pkl, flame2023_Open.pkl) нужно
-скачать вручную после регистрации на https://flame.is.tue.mpg.de/ и
-разместить в `DECA/data/`:
+FLAME2020 для DECA можно скачать в `DECA/data/generic_model.pkl` командой:
 
 ```bash
 git clone --depth 1 https://github.com/yfeng95/DECA.git DECA
 python -m gdown 1rp8kdyLPvErw2dTmqtjISRVvQLj6Yzje -O DECA/data/deca_model.tar
+python -m src.reconstruction.download_assets flame2020
 ```
 
-Затем:
+Скрипт использует Hugging Face-зеркало `camenduru/show` и проверяет SHA256:
 
-1. Зарегистрироваться на https://flame.is.tue.mpg.de/.
-2. Скачать `FLAME2020.zip`.
-3. Распаковать `generic_model.pkl`.
-4. Положить файл в `DECA/data/generic_model.pkl`.
+```text
+efcd14cc4a69f3a3d9af8ded80146b5b6b50df3bd74cf69108213b144eba725b
+```
+
+FLAME2023 / FLAME2023 Open размещаются в том же каталоге как
+`flame2023.pkl` и `flame2023_Open.pkl`.
 
 ## Проверка
 
 ```bash
 # DECA backend с FLAME2020
+python -m src.reconstruction.download_assets flame2020
 python -m src.reconstruction.main \
   --input DECA/TestSamples/examples/IMG_0392_inputs.jpg \
   --output outputs/deca_result.glb \
   --device cpu \
   --no-texture
 
-# С указанием FLAME модели (DECA всё равно использует FLAME2020)
+# Генерация FLAME2023 без входного фото
 python -m src.reconstruction.main \
-  --input photo.jpg \
   --output result.glb \
   --flame-model flame2023_Open
 ```
 
 Если FLAME asset отсутствует, CLI завершится понятной ошибкой и перечислит
-недостающие файлы. Для проверки остального пайплайна без FLAME можно использовать:
+недостающие файлы. Если `pytorch3d` не установлен, пайплайн автоматически
+переключается в mesh-only режим: DECA восстанавливает вершины и faces без
+рендера, detail normals и texture extraction. Для проверки остального пайплайна
+без FLAME можно использовать:
 
 ```bash
 python -m src.reconstruction.main \

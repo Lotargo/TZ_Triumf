@@ -1,220 +1,267 @@
-/**
- * Three.js 3D Viewer for Face Visualization
- */
+import * as THREE from "three";
+import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 
-class FaceViewer {
-    constructor(containerId) {
-        this.container = document.getElementById(containerId);
-        this.scene = null;
-        this.camera = null;
-        this.renderer = null;
-        this.controls = null;
+const MODELS = {
+    deca: {
+        title: "DECA image-to-mesh",
+        description:
+            "Mesh-only реконструкция по входному фото через DECA/FLAME2020 на CPU. Рендерер PyTorch3D отключается, но геометрия экспортируется в валидный GLB.",
+        url: "models/deca_result.glb",
+        vertices: "5023",
+        faces: "9976",
+        format: "GLB / ColorVisuals",
+    },
+    "flame-textured": {
+        title: "FLAME2023 textured baseline",
+        description:
+            "Параметрическая FLAME2023 Open модель с UV-разверткой и mean texture из FLAME_texture.npz. Это web-ready baseline для проверки текстурного экспорта.",
+        url: "models/flame2023_textured.glb",
+        vertices: "5023",
+        faces: "9976",
+        format: "GLB / TextureVisuals",
+    },
+    "flame-neutral": {
+        title: "FLAME2023 neutral mesh",
+        description:
+            "Нейтральная параметрическая голова без текстуры. Удобна для проверки топологии, масштаба и поведения материала в браузерной сцене.",
+        url: "models/flame2023_neutral.glb",
+        vertices: "5023",
+        faces: "9976",
+        format: "GLB / ColorVisuals",
+    },
+};
+
+class FaceDemoViewer {
+    constructor(container) {
+        this.container = container;
+        this.status = document.getElementById("viewer-status");
+        this.download = document.getElementById("viewer-download");
+        this.title = document.getElementById("model-title");
+        this.description = document.getElementById("model-description");
+        this.vertices = document.getElementById("model-vertices");
+        this.faces = document.getElementById("model-faces");
+        this.format = document.getElementById("model-format");
+        this.tabs = Array.from(document.querySelectorAll("[data-model-id]"));
+        this.wireframeButton = document.getElementById("viewer-wireframe");
+        this.resetButton = document.getElementById("viewer-reset");
+        this.loader = new GLTFLoader();
         this.model = null;
-        
-        this.init();
+        this.wireframe = false;
+        this.animationFrame = null;
+
+        this.initScene();
+        this.bindEvents();
+        this.loadModel("flame-neutral");
     }
-    
-    init() {
-        // Scene
+
+    initScene() {
         this.scene = new THREE.Scene();
-        this.scene.background = new THREE.Color(0x1a1a2e);
-        
-        // Camera
-        this.camera = new THREE.PerspectiveCamera(
-            75,
-            this.container.clientWidth / this.container.clientHeight,
-            0.1,
-            1000
-        );
-        this.camera.position.z = 2;
-        
-        // Renderer
-        this.renderer = new THREE.WebGLRenderer({ antialias: true });
-        this.renderer.setSize(
-            this.container.clientWidth,
-            this.container.clientHeight
-        );
-        this.renderer.setPixelRatio(window.devicePixelRatio);
+        this.scene.background = new THREE.Color(0xf6fbfa);
+
+        const { width, height } = this.container.getBoundingClientRect();
+        this.camera = new THREE.PerspectiveCamera(42, width / height, 0.01, 100);
+        this.camera.position.set(0, 0.08, 2.4);
+
+        this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+        this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        this.renderer.setSize(width, height);
+        this.renderer.outputColorSpace = THREE.SRGBColorSpace;
         this.container.appendChild(this.renderer.domElement);
-        
-        // Controls
-        this.controls = new THREE.OrbitControls(
-            this.camera,
-            this.renderer.domElement
-        );
+
+        this.controls = new OrbitControls(this.camera, this.renderer.domElement);
         this.controls.enableDamping = true;
-        this.controls.dampingFactor = 0.05;
-        
-        // Lighting
-        this.setupLighting();
-        
-        // Grid helper
-        this.setupGrid();
-        
-        // Handle resize
-        window.addEventListener('resize', () => this.onResize());
-        
-        // Start animation loop
+        this.controls.dampingFactor = 0.08;
+        this.controls.minDistance = 0.8;
+        this.controls.maxDistance = 5;
+
+        const hemiLight = new THREE.HemisphereLight(0xffffff, 0xd8e7fb, 1.35);
+        this.scene.add(hemiLight);
+
+        const keyLight = new THREE.DirectionalLight(0xffffff, 1.55);
+        keyLight.position.set(2.4, 3, 4.5);
+        this.scene.add(keyLight);
+
+        const fillLight = new THREE.DirectionalLight(0xffffff, 0.85);
+        fillLight.position.set(-2, 1.4, 3.2);
+        this.scene.add(fillLight);
+
+        const rimLight = new THREE.DirectionalLight(0xd8e7fb, 0.75);
+        rimLight.position.set(-2.4, 1.2, -2);
+        this.scene.add(rimLight);
+
+        const grid = new THREE.GridHelper(2.4, 12, 0x88b8a7, 0xdfe8e7);
+        grid.position.y = -0.72;
+        this.scene.add(grid);
+
+        window.addEventListener("resize", () => this.resize());
         this.animate();
     }
-    
-    setupLighting() {
-        // Ambient light
-        const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
-        this.scene.add(ambientLight);
-        
-        // Directional light
-        const directionalLight = new THREE.DirectionalLight(0xffffff, 0.5);
-        directionalLight.position.set(1, 1, 1);
-        this.scene.add(directionalLight);
-        
-        // Back light
-        const backLight = new THREE.DirectionalLight(0xffffff, 0.3);
-        backLight.position.set(-1, -1, -1);
-        this.scene.add(backLight);
+
+    bindEvents() {
+        this.tabs.forEach((tab) => {
+            tab.addEventListener("click", () => this.loadModel(tab.dataset.modelId));
+        });
+
+        this.resetButton?.addEventListener("click", () => this.frameModel());
+
+        this.wireframeButton?.addEventListener("click", () => {
+            this.wireframe = !this.wireframe;
+            this.applyWireframe();
+            this.wireframeButton.classList.toggle("is-active", this.wireframe);
+        });
     }
-    
-    setupGrid() {
-        // Add grid for reference
-        const gridHelper = new THREE.GridHelper(10, 10, 0x444444, 0x222222);
-        gridHelper.rotation.x = Math.PI / 2;
-        gridHelper.position.z = -1;
-        this.scene.add(gridHelper);
-    }
-    
-    loadModel(url) {
-        // Remove existing model
-        if (this.model) {
-            this.scene.remove(this.model);
+
+    loadModel(id) {
+        const modelInfo = MODELS[id];
+        if (!modelInfo) {
+            return;
         }
-        
-        // Show loading indicator
-        this.showLoading(true);
-        
-        const loader = new THREE.GLTFLoader();
-        
-        loader.load(
-            url,
+
+        this.setActiveTab(id);
+        this.updateDetails(modelInfo);
+        this.setStatus("Загрузка модели...");
+
+        this.loader.load(
+            modelInfo.url,
             (gltf) => {
+                if (this.model) {
+                    this.scene.remove(this.model);
+                    this.disposeObject(this.model);
+                }
+
                 this.model = gltf.scene;
-                
-                // Center model
-                const box = new THREE.Box3().setFromObject(this.model);
-                const center = box.getCenter(new THREE.Vector3());
-                this.model.position.sub(center);
-                
-                // Scale to fit
-                const size = box.getSize(new THREE.Vector3());
-                const maxDim = Math.max(size.x, size.y, size.z);
-                const scale = 2 / maxDim;
-                this.model.scale.multiplyScalar(scale);
-                
+                this.model.traverse((child) => {
+                    if (!child.isMesh) {
+                        return;
+                    }
+                    child.castShadow = false;
+                    child.receiveShadow = false;
+                    const preserveTexture = id === "flame-textured" && Boolean(child.material?.map);
+                    if (!preserveTexture) {
+                        child.material = new THREE.MeshBasicMaterial({
+                            color: 0xc98f78,
+                            side: THREE.DoubleSide,
+                        });
+                    } else {
+                        child.material.side = THREE.DoubleSide;
+                        child.material.roughness = 0.82;
+                        child.material.metalness = 0.02;
+                    }
+                    child.material.needsUpdate = true;
+                });
+
                 this.scene.add(this.model);
-                this.showLoading(false);
-                
-                console.log('Model loaded successfully');
+                this.frameModel();
+                this.applyWireframe();
+                this.setStatus("");
             },
-            (progress) => {
-                console.log('Loading:', (progress.loaded / progress.total * 100) + '%');
-            },
+            undefined,
             (error) => {
-                console.error('Error loading model:', error);
-                this.showLoading(false);
-                this.showError('Ошибка загрузки модели');
+                console.error(error);
+                this.setStatus("Не удалось загрузить GLB");
             }
         );
     }
-    
-    loadFromGeometry(vertices, faces) {
-        // Remove existing model
-        if (this.model) {
-            this.scene.remove(this.model);
+
+    frameModel() {
+        if (!this.model) {
+            return;
         }
-        
-        // Create geometry
-        const geometry = new THREE.BufferGeometry();
-        
-        // Set vertices
-        const positionArray = new Float32Array(vertices.flat());
-        geometry.setAttribute('position', new THREE.BufferAttribute(positionArray, 3));
-        
-        // Set faces
-        const indexArray = new Uint32Array(faces.flat());
-        geometry.setIndex(new THREE.BufferAttribute(indexArray, 1));
-        
-        // Compute normals
-        geometry.computeVertexNormals();
-        
-        // Create material
-        const material = new THREE.MeshStandardMaterial({
-            color: 0xffd4b8,
-            roughness: 0.7,
-            metalness: 0.1,
-            side: THREE.DoubleSide
-        });
-        
-        // Create mesh
-        this.model = new THREE.Mesh(geometry, material);
-        
-        // Center model
-        geometry.computeBoundingBox();
-        const center = geometry.boundingBox.getCenter(new THREE.Vector3());
-        this.model.position.sub(center);
-        
-        // Scale to fit
-        const size = geometry.boundingBox.getSize(new THREE.Vector3());
+
+        const box = new THREE.Box3().setFromObject(this.model);
+        const size = box.getSize(new THREE.Vector3());
+        const center = box.getCenter(new THREE.Vector3());
         const maxDim = Math.max(size.x, size.y, size.z);
-        const scale = 2 / maxDim;
-        this.model.scale.multiplyScalar(scale);
-        
-        this.scene.add(this.model);
-    }
-    
-    showLoading(show) {
-        const placeholder = this.container.querySelector('.placeholder');
-        if (placeholder) {
-            placeholder.style.display = show ? 'block' : 'none';
-        }
-    }
-    
-    showError(message) {
-        const placeholder = this.container.querySelector('.placeholder');
-        if (placeholder) {
-            placeholder.innerHTML = `<p style="color: #ef4444;">${message}</p>`;
-        }
-    }
-    
-    resetCamera() {
-        this.camera.position.z = 2;
-        this.controls.reset();
-    }
-    
-    onResize() {
-        this.camera.aspect = this.container.clientWidth / this.container.clientHeight;
-        this.camera.updateProjectionMatrix();
-        this.renderer.setSize(
-            this.container.clientWidth,
-            this.container.clientHeight
+        const scale = maxDim > 0 ? 1.35 / maxDim : 1;
+
+        this.model.scale.setScalar(scale);
+        this.model.rotation.set(0, 0, 0);
+        this.model.position.set(
+            -center.x * scale,
+            -center.y * scale + 0.12,
+            -center.z * scale
         );
+
+        this.controls.target.set(0, 0.08, 0);
+        this.camera.position.set(0, 0.12, 2.15);
+        this.camera.lookAt(0, 0.08, 0);
+        this.controls.update();
     }
-    
-    animate() {
-        requestAnimationFrame(() => this.animate());
-        
-        // Rotate model slowly
-        if (this.model) {
-            this.model.rotation.y += 0.005;
+
+    applyWireframe() {
+        if (!this.model) {
+            return;
         }
-        
+
+        this.model.traverse((child) => {
+            if (child.isMesh && child.material) {
+                child.material.wireframe = this.wireframe;
+                child.material.needsUpdate = true;
+            }
+        });
+    }
+
+    setActiveTab(id) {
+        this.tabs.forEach((tab) => {
+            tab.classList.toggle("is-active", tab.dataset.modelId === id);
+        });
+    }
+
+    updateDetails(modelInfo) {
+        this.title.textContent = modelInfo.title;
+        this.description.textContent = modelInfo.description;
+        this.vertices.textContent = modelInfo.vertices;
+        this.faces.textContent = modelInfo.faces;
+        this.format.textContent = modelInfo.format;
+        this.download.href = modelInfo.url;
+    }
+
+    setStatus(message) {
+        if (!this.status) {
+            return;
+        }
+
+        this.status.textContent = message;
+        this.status.hidden = !message;
+    }
+
+    resize() {
+        const { width, height } = this.container.getBoundingClientRect();
+        if (!width || !height) {
+            return;
+        }
+
+        this.camera.aspect = width / height;
+        this.camera.updateProjectionMatrix();
+        this.renderer.setSize(width, height);
+    }
+
+    animate() {
+        this.animationFrame = requestAnimationFrame(() => this.animate());
+        if (this.model) {
+            this.model.rotation.y += 0.0025;
+        }
         this.controls.update();
         this.renderer.render(this.scene, this.camera);
     }
-    
-    takeScreenshot() {
-        this.renderer.render(this.scene, this.camera);
-        return this.renderer.domElement.toDataURL('image/png');
+
+    disposeObject(object) {
+        object.traverse((child) => {
+            if (child.geometry) {
+                child.geometry.dispose();
+            }
+            if (child.material) {
+                const materials = Array.isArray(child.material) ? child.material : [child.material];
+                materials.forEach((material) => material.dispose());
+            }
+        });
     }
 }
 
-// Export for use in other modules
-window.FaceViewer = FaceViewer;
+document.addEventListener("DOMContentLoaded", () => {
+    const container = document.getElementById("face-viewer");
+    if (container) {
+        window.faceDemoViewer = new FaceDemoViewer(container);
+    }
+});

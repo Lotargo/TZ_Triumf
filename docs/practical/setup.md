@@ -39,13 +39,26 @@ pip install -e ".[dev]"
 
 #### 3. FLAME модели
 
-Модели FLAME 2020/2023 нужно скачать вручную после регистрации на
-[flame.is.tue.mpg.de](https://flame.is.tue.mpg.de/) и разместить в `DECA/data/`:
+Модели FLAME размещаются в `DECA/data/`:
 
 - `generic_model.pkl` (FLAME2020) — обязателен для DECA
 - `flame2023_Open.pkl` (FLAME2023 Open, CC-BY-4.0)
 - `flame2023.pkl` (FLAME2023)
 - `FLAME_masks.pkl`
+
+Для FLAME2020 добавлена воспроизводимая загрузка из Hugging Face-зеркала с
+проверкой SHA256:
+
+```bash
+python -m src.reconstruction.download_assets flame2020
+
+# После установки пакета:
+download-reconstruction-assets flame2020
+```
+
+Скрипт сохраняет файл в `DECA/data/generic_model.pkl` и проверяет checksum
+`efcd14cc4a69f3a3d9af8ded80146b5b6b50df3bd74cf69108213b144eba725b`.
+Перед использованием учитывайте лицензионные условия FLAME.
 
 #### 4. Дополнительные зависимости для DECA
 
@@ -92,9 +105,8 @@ python -m src.reconstruction.main \
     --device cuda \
     --detail-level high
 
-# Использование FLAME2023 Open (для альтернативных бэкендов)
+# Генерация нейтральной FLAME2023 Open модели без входного фото
 python -m src.reconstruction.main \
-    --input photo.jpg \
     --output result.glb \
     --flame-model flame2023_Open
 

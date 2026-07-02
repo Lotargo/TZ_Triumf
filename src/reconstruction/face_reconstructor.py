@@ -9,6 +9,7 @@ for parametric mesh generation via Flame2023Decoder.
 """
 
 from pathlib import Path
+from importlib.util import find_spec
 from typing import Dict, List, Optional, Union
 
 import numpy as np
@@ -18,6 +19,27 @@ try:
     import torch
 except ImportError:  # pragma: no cover - exercised only in minimal environments
     torch = None
+
+
+def _install_legacy_chumpy_shims() -> None:
+    """Provide Python/NumPy aliases expected by legacy chumpy code."""
+    import inspect
+
+    if not hasattr(inspect, "getargspec"):
+        inspect.getargspec = inspect.getfullargspec
+
+    aliases = {
+        "bool": bool,
+        "int": int,
+        "float": float,
+        "complex": complex,
+        "object": object,
+        "unicode": str,
+        "str": str,
+    }
+    for name, value in aliases.items():
+        if name not in np.__dict__:
+            setattr(np, name, value)
 
 
 class ReconstructionResult:
@@ -37,6 +59,8 @@ class ReconstructionResult:
         vertices: np.ndarray,
         faces: np.ndarray,
         texture: Optional[np.ndarray] = None,
+        uv: Optional[np.ndarray] = None,
+        uv_faces: Optional[np.ndarray] = None,
         landmarks: Optional[np.ndarray] = None,
         params: Optional[dict] = None,
         normals: Optional[np.ndarray] = None,
@@ -44,6 +68,8 @@ class ReconstructionResult:
         self.vertices = vertices
         self.faces = faces
         self.texture = texture
+        self.uv = uv
+        self.uv_faces = uv_faces
         self.landmarks = landmarks
         self.params = params or {}
         self.normals = normals
@@ -63,19 +89,24 @@ class ReconstructionResult:
             for v in self.vertices:
                 f.write(f"v {v[0]:.6f} {v[1]:.6f} {v[2]:.6f}\n")
             
-            # Write texture coordinates if available
-            if self.texture is not None:
-                # Placeholder UV coordinates
-                for i in range(len(self.vertices)):
-                    f.write(f"vt {i % 2} {i % 2}\n")
+            has_uv = self.texture is not None and self.uv is not None
+
+            if has_uv:
+                for vt in self.uv:
+                    f.write(f"vt {vt[0]:.6f} {1.0 - vt[1]:.6f}\n")
             
             # Write faces (1-indexed)
-            for face in self.faces:
-                if self.texture is not None:
+            for idx, face in enumerate(self.faces):
+                if has_uv:
+                    uv_face = (
+                        self.uv_faces[idx]
+                        if self.uv_faces is not None
+                        else face
+                    )
                     f.write(
-                        f"f {face[0] + 1}/{face[0] + 1} "
-                        f"{face[1] + 1}/{face[1] + 1} "
-                        f"{face[2] + 1}/{face[2] + 1}\n"
+                        f"f {face[0] + 1}/{uv_face[0] + 1} "
+                        f"{face[1] + 1}/{uv_face[1] + 1} "
+                        f"{face[2] + 1}/{uv_face[2] + 1}\n"
                     )
                 else:
                     f.write(f"f {face[0] + 1} {face[1] + 1} {face[2] + 1}\n")
@@ -92,15 +123,19 @@ class ReconstructionResult:
         path = Path(path)
         path.parent.mkdir(parents=True, exist_ok=True)
         
-        mesh = trimesh.Trimesh(
-            vertices=self.vertices,
-            faces=self.faces,
-        )
+        vertices = self.vertices
+        faces = self.faces
+        uv = self.uv
         
-        # Add texture if available
         if self.texture is not None:
-            # Create UV mapping
-            uv = self._create_uv_mapping(mesh)
+            if uv is None:
+                uv = self._create_uv_mapping(vertices)
+            elif self.uv_faces is not None:
+                vertices, faces, uv = self._expand_mesh_for_uv()
+
+        mesh = trimesh.Trimesh(vertices=vertices, faces=faces)
+
+        if self.texture is not None:
             mesh.visual = trimesh.visual.TextureVisuals(
                 uv=uv,
                 image=Image.fromarray(self.texture),
@@ -127,15 +162,21 @@ class ReconstructionResult:
         
         mesh.export(str(path), file_type="ply")
     
-    def _create_uv_mapping(self, mesh) -> np.ndarray:
+    def _create_uv_mapping(self, vertices: np.ndarray) -> np.ndarray:
         """Create simple UV mapping for texture."""
-        # Simple planar projection
-        uv = np.zeros((len(mesh.vertices), 2))
-        x_range = mesh.vertices[:, 0].max() - mesh.vertices[:, 0].min()
-        y_range = mesh.vertices[:, 1].max() - mesh.vertices[:, 1].min()
-        uv[:, 0] = (mesh.vertices[:, 0] - mesh.vertices[:, 0].min()) / max(x_range, 1e-8)
-        uv[:, 1] = (mesh.vertices[:, 1] - mesh.vertices[:, 1].min()) / max(y_range, 1e-8)
+        uv = np.zeros((len(vertices), 2))
+        x_range = vertices[:, 0].max() - vertices[:, 0].min()
+        y_range = vertices[:, 1].max() - vertices[:, 1].min()
+        uv[:, 0] = (vertices[:, 0] - vertices[:, 0].min()) / max(x_range, 1e-8)
+        uv[:, 1] = (vertices[:, 1] - vertices[:, 1].min()) / max(y_range, 1e-8)
         return uv
+
+    def _expand_mesh_for_uv(self) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """Duplicate seam vertices so exporters can use FLAME's per-face UVs."""
+        expanded_vertices = self.vertices[self.faces.reshape(-1)]
+        expanded_uv = self.uv[self.uv_faces.reshape(-1)]
+        expanded_faces = np.arange(len(expanded_vertices), dtype=np.int64).reshape(-1, 3)
+        return expanded_vertices, expanded_faces, expanded_uv
     
     @property
     def vertex_count(self) -> int:
@@ -249,16 +290,54 @@ class FaceReconstructor:
             sys.path.append(str(deca_root))
 
             self._validate_deca_assets(deca_root)
+            _install_legacy_chumpy_shims()
 
             from decalib.deca import DECA
             from decalib.utils.config import cfg as deca_cfg
 
-            deca_cfg.model.use_tex = True
-            deca_cfg.model.topology_path = "data/head_template.obj"
+            albedo_path = deca_root / "data" / "FLAME_albedo_from_BFM.npz"
+            mesh_only = find_spec("pytorch3d") is None
+            deca_cfg.model.use_tex = albedo_path.exists()
+            deca_cfg.model.topology_path = str(deca_root / "data" / "head_template.obj")
             deca_cfg.model.mano_path = "data"
             deca_cfg.model.flame_path = "data"
+            if not deca_cfg.model.use_tex:
+                print(
+                    "DECA texture model disabled: "
+                    f"{albedo_path} was not found.",
+                    flush=True,
+                )
+            if mesh_only:
+                print(
+                    "DECA renderer disabled: pytorch3d is not installed; "
+                    "mesh-only inference will be used.",
+                    flush=True,
+                )
 
-            return DECA(config=deca_cfg, device=self.device)
+            original_torch_load = torch.load
+            original_setup_renderer = DECA._setup_renderer
+
+            def _torch_load_with_map_location(*args, **kwargs):
+                if self.device.type == "cpu" and "map_location" not in kwargs:
+                    kwargs["map_location"] = self.device
+                return original_torch_load(*args, **kwargs)
+
+            def _setup_mesh_only_renderer(deca_self, model_cfg):
+                from decalib.utils import util
+
+                _, uvcoords, faces, uv_faces = util.load_obj(model_cfg.topology_path)
+                deca_self.faces = faces.to(deca_self.device)
+                deca_self.raw_uvcoords = uvcoords.to(deca_self.device)
+                deca_self.uvfaces = uv_faces.to(deca_self.device)
+
+            try:
+                torch.load = _torch_load_with_map_location
+                if mesh_only:
+                    DECA._setup_renderer = _setup_mesh_only_renderer
+                return DECA(config=deca_cfg, device=self.device)
+            finally:
+                torch.load = original_torch_load
+                DECA._setup_renderer = original_setup_renderer
 
         except Exception as exc:
             raise RuntimeError(
@@ -370,14 +449,25 @@ class FaceReconstructor:
         with torch.no_grad():
             with torch.no_grad():
                 codedict = self.model.encode(input_tensor)
-                opdict = self.model.decode(codedict)
+                opdict = self.model.decode(
+                    codedict,
+                    rendering=False,
+                    vis_lmk=False,
+                    return_vis=False,
+                    use_detail=False,
+                )
 
             vertices = opdict["verts"][0].cpu().numpy()
-            faces = self.model.faces.cpu().numpy()
+            if hasattr(self.model, "faces"):
+                faces = self.model.faces.cpu().numpy()
+            else:
+                faces = self.model.render.faces[0].cpu().numpy()
             texture = opdict.get("tex_image", None)
             if texture is not None:
                 texture = texture[0].permute(1, 2, 0).cpu().numpy()
                 texture = (texture * 255).astype(np.uint8)
+            if not with_texture:
+                texture = None
 
             params = {
                 "shape": codedict["shape"].cpu().numpy(),
@@ -402,6 +492,7 @@ class FaceReconstructor:
         shape: Optional[np.ndarray] = None,
         expression: Optional[np.ndarray] = None,
         pose: Optional[np.ndarray] = None,
+        with_texture: bool = True,
     ) -> ReconstructionResult:
         """Generate FLAME mesh from parametric coefficients.
 
@@ -412,6 +503,7 @@ class FaceReconstructor:
             shape: (B, N_shape) or (N_shape,) shape coefficients, or None.
             expression: (B, N_exp) or (N_exp,) expression coefficients, or None.
             pose: (B, J*3) or (J*3,) or (J, 3) axis-angle joint rotations, or None.
+            with_texture: Whether to attach the FLAME mean texture and UV layout.
 
         Returns:
             ReconstructionResult with 3D mesh.
@@ -441,9 +533,22 @@ class FaceReconstructor:
                 return_joints=False,
             )
 
+        texture = None
+        uv = None
+        uv_faces = None
+        if with_texture:
+            texture, uv, uv_faces = self._load_flame_texture()
+            if uv_faces is not None and len(uv_faces) != len(faces):
+                texture = None
+                uv = None
+                uv_faces = None
+
         result = ReconstructionResult(
             vertices=vertices[0].cpu().numpy(),
             faces=faces.cpu().numpy(),
+            texture=texture,
+            uv=uv,
+            uv_faces=uv_faces,
             params={
                 "shape": shape,
                 "expression": expression,
@@ -453,6 +558,18 @@ class FaceReconstructor:
 
         result = self.postprocessor.process(result)
         return result
+
+    def _load_flame_texture(self) -> tuple[Optional[np.ndarray], Optional[np.ndarray], Optional[np.ndarray]]:
+        """Load FLAME mean texture plus UV topology when available."""
+        texture_file = Path(__file__).parent.parent.parent / "DECA" / "data" / "FLAME_texture.npz"
+        if not texture_file.exists():
+            return None, None, None
+
+        data = np.load(texture_file)
+        texture = np.clip(data["mean"], 0, 255).astype(np.uint8)
+        uv = data["vt"].astype(np.float32)
+        uv_faces = data["ft"].astype(np.int64)
+        return texture, uv, uv_faces
     
     def reconstruct_from_array(
         self,
@@ -509,7 +626,7 @@ class MockDECA:
             "pose": torch.zeros((1, 15), dtype=torch.float32),
         }
 
-    def decode(self, codedict):
+    def decode(self, codedict, **kwargs):
         verts, _ = _make_mock_mesh()
         return {"verts": verts}
 

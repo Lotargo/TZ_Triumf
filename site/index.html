@@ -23,6 +23,7 @@
             <span>3D Face Reconstruction</span>
         </a>
         <nav class="nav" aria-label="Разделы документа">
+            <a href="#demo">3D-демо</a>
             <a href="#methods">Методы</a>
             <a href="#risks">Риски</a>
             <a href="#downloads">Документы</a>
@@ -76,6 +77,62 @@
                 <strong>ML + 3D</strong>
                 <p>Документ связывает обзор методов, domain gap, датасеты, архитектуру и практическую проверку качества.</p>
             </article>
+        </section>
+
+        <section id="demo" class="section demo-section" aria-label="Интерактивная 3D-визуализация">
+            <div class="section-heading">
+                <p class="eyebrow">Практическая часть · WebGL preview</p>
+                <h2>Модель можно открыть прямо в браузере</h2>
+                <p>
+                    Демо связывает ML-пайплайн с задачей виртуальной примерки: GLB-результаты DECA/FLAME загружаются в Three.js, вращаются, масштабируются и проверяются как web-ready ассеты.
+                </p>
+            </div>
+
+            <div class="demo-layout">
+                <div class="viewer-shell">
+                    <div class="viewer-toolbar" aria-label="Выбор модели">
+                        <button class="model-tab" type="button" data-model-id="deca">DECA result</button>
+                        <button class="model-tab" type="button" data-model-id="flame-textured">FLAME textured</button>
+                        <button class="model-tab is-active" type="button" data-model-id="flame-neutral">FLAME neutral</button>
+                    </div>
+                    <div class="viewer-stage" id="face-viewer" aria-label="3D-просмотрщик моделей лица">
+                        <div class="viewer-status" id="viewer-status">Загрузка модели...</div>
+                    </div>
+                    <div class="viewer-actions">
+                        <button class="tool-btn" type="button" id="viewer-reset" title="Сбросить камеру">Reset</button>
+                        <button class="tool-btn" type="button" id="viewer-wireframe" title="Показать сетку">Wireframe</button>
+                    <a class="tool-btn" id="viewer-download" href="models/flame2023_neutral.glb" download>Download GLB</a>
+                    </div>
+                </div>
+
+                <aside class="demo-details" aria-live="polite">
+                    <span class="panel-label">Текущий ассет</span>
+                    <h3 id="model-title">FLAME2023 neutral mesh</h3>
+                    <p id="model-description">
+                        Нейтральная параметрическая голова без текстуры. Удобна для проверки топологии, масштаба и поведения материала в браузерной сцене.
+                    </p>
+                    <dl class="model-stats">
+                        <div>
+                            <dt>Вершины</dt>
+                            <dd id="model-vertices">5023</dd>
+                        </div>
+                        <div>
+                            <dt>Faces</dt>
+                            <dd id="model-faces">9976</dd>
+                        </div>
+                        <div>
+                            <dt>Формат</dt>
+                            <dd id="model-format">GLB / ColorVisuals</dd>
+                        </div>
+                    </dl>
+                    <div class="pipeline-list" aria-label="Практический пайплайн">
+                        <div><span>01</span> Фото или параметры FLAME</div>
+                        <div><span>02</span> DECA / Flame2023Decoder</div>
+                        <div><span>03</span> OBJ/GLB export</div>
+                        <div><span>04</span> Three.js preview</div>
+                    </div>
+                </aside>
+            </div>
         </section>
 
         <section id="methods" class="section document-section">
@@ -237,7 +294,16 @@
     <script src="https://cdn.jsdelivr.net/npm/marked@15.0.12/marked.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/contrib/auto-render.min.js"></script>
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://cdn.jsdelivr.net/npm/three@0.166.1/build/three.module.js",
+                "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.166.1/examples/jsm/"
+            }
+        }
+    </script>
     <script src="js/export.js"></script>
     <script src="js/main.js"></script>
+    <script type="module" src="js/viewer.js?v=4"></script>
 </body>
 </html>
