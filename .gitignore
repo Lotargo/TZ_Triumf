@@ -9,3 +9,4 @@ DECA/
 *.egg-info/
 build/
 .playwright-mcp
+Описание.md

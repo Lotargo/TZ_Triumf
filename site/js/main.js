@@ -1,132 +1,122 @@
-/**
- * Main application script
- */
-
-document.addEventListener('DOMContentLoaded', () => {
-    // Initialize viewer
-    const viewer = new FaceViewer('viewer-3d');
-    
-    // Initialize exporter
+document.addEventListener("DOMContentLoaded", () => {
     const exporter = new DocExporter();
-    
-    // File input handler
-    const fileInput = document.getElementById('file-input');
-    const btnLoad = document.getElementById('btn-load');
-    const btnReset = document.getElementById('btn-reset');
-    
-    btnLoad.addEventListener('click', () => {
-        fileInput.click();
-    });
-    
-    fileInput.addEventListener('change', (event) => {
-        const file = event.target.files[0];
-        if (file) {
-            const url = URL.createObjectURL(file);
-            viewer.loadModel(url);
-        }
-    });
-    
-    btnReset.addEventListener('click', () => {
-        viewer.resetCamera();
-    });
-    
-    // PDF download
-    const btnPDF = document.getElementById('btn-pdf');
-    btnPDF.addEventListener('click', () => {
+    const viewer = new DocViewer(exporter);
+
+    document.getElementById("btn-pdf")?.addEventListener("click", () => {
         exporter.generatePDF();
     });
-    
-    // All MD download
-    const btnAllMD = document.getElementById('btn-all-md');
-    btnAllMD.addEventListener('click', () => {
+
+    document.getElementById("btn-all-md")?.addEventListener("click", () => {
         exporter.downloadAllMD();
     });
-    
-    // Individual MD downloads
-    document.querySelectorAll('.btn-download').forEach(btn => {
-        if (btn.href && btn.href.endsWith('.md')) {
-            btn.addEventListener('click', (e) => {
-                e.preventDefault();
-                const url = btn.href;
-                const filename = url.split('/').pop();
-                exporter.downloadSingleMD(url, filename);
-            });
-        }
-    });
-    
-    // Smooth scroll for navigation
-    document.querySelectorAll('.nav a').forEach(link => {
-        link.addEventListener('click', (e) => {
-            e.preventDefault();
-            const targetId = link.getAttribute('href').substring(1);
-            const target = document.getElementById(targetId);
-            if (target) {
-                target.scrollIntoView({ behavior: 'smooth' });
-            }
+
+    document.querySelectorAll(".btn-view-doc").forEach((button) => {
+        button.addEventListener("click", () => {
+            viewer.open(button.dataset.docUrl, button.dataset.docTitle);
         });
     });
-    
-    // Demo: Generate sample face geometry
-    window.generateDemoFace = () => {
-        const vertices = generateFaceVertices();
-        const faces = generateFaceFaces(vertices.length / 3);
-        viewer.loadFromGeometry(vertices, faces);
-    };
-    
-    function generateFaceVertices() {
-        const vertices = [];
-        const segments = 30;
-        
-        for (let i = 0; i < segments; i++) {
-            for (let j = 0; j < segments; j++) {
-                const phi = (i / segments) * Math.PI;
-                const theta = (j / segments) * 2 * Math.PI;
-                
-                // Basic sphere with face-like deformation
-                let r = 0.5;
-                
-                // Nose deformation
-                if (phi > 0.3 && phi < 0.7 && theta > 0.8 && theta < 1.2) {
-                    r += 0.15 * Math.sin((phi - 0.3) * Math.PI / 0.4);
-                }
-                
-                // Eye sockets
-                if (phi > 0.4 && phi < 0.6) {
-                    if (theta > 0.3 && theta < 0.6) {
-                        r -= 0.05;
-                    }
-                    if (theta > 1.8 && theta < 2.1) {
-                        r -= 0.05;
-                    }
-                }
-                
-                const x = r * Math.sin(phi) * Math.cos(theta);
-                const y = r * Math.cos(phi);
-                const z = r * Math.sin(phi) * Math.sin(theta);
-                
-                vertices.push([x, y, z]);
-            }
-        }
-        
-        return vertices;
-    }
-    
-    function generateFaceFaces(vertexCount) {
-        const faces = [];
-        const segments = 30;
-        
-        for (let i = 0; i < segments - 1; i++) {
-            for (let j = 0; j < segments - 1; j++) {
-                const idx = i * segments + j;
-                
-                faces.push([idx, idx + segments, idx + 1]);
-                faces.push([idx + 1, idx + segments, idx + segments + 1]);
-            }
-        }
-        
-        return faces;
-    }
-    
-    console.log('3D Face Reconstruction App initialized');
-    console.log('Use generateDemoFace() to see a demo');
 });
+
+class DocViewer {
+    constructor(exporter) {
+        this.exporter = exporter;
+        this.modal = document.getElementById("doc-modal");
+        this.title = document.getElementById("doc-modal-title");
+        this.content = document.getElementById("doc-modal-content");
+        this.download = document.getElementById("doc-modal-download");
+        this.lastActiveElement = null;
+
+        this.modal.querySelectorAll("[data-doc-close]").forEach((closeControl) => {
+            closeControl.addEventListener("click", () => this.close());
+        });
+
+        document.addEventListener("keydown", (event) => {
+            if (event.key === "Escape" && this.modal.getAttribute("aria-hidden") === "false") {
+                this.close();
+            }
+        });
+    }
+
+    async open(url, title) {
+        if (!url) {
+            return;
+        }
+
+        this.lastActiveElement = document.activeElement;
+        this.title.textContent = title || "Документ";
+        this.download.href = url;
+        this.download.setAttribute("download", url.split("/").pop() || "document.md");
+        this.content.innerHTML = '<div class="doc-loading">Загрузка документа...</div>';
+        document.body.classList.add("modal-open");
+        this.modal.classList.add("is-open");
+        this.modal.setAttribute("aria-hidden", "false");
+
+        try {
+            const markdown = await this.exporter.fetchDoc(url);
+            this.content.innerHTML = this.renderMarkdown(markdown);
+            this.renderMath();
+        } catch (error) {
+            console.error(error);
+            this.content.innerHTML = '<div class="doc-error">Не удалось загрузить документ.</div>';
+        }
+
+        this.content.focus({ preventScroll: true });
+    }
+
+    close() {
+        this.modal.setAttribute("aria-hidden", "true");
+        this.modal.classList.remove("is-open");
+        document.body.classList.remove("modal-open");
+        this.lastActiveElement?.focus?.({ preventScroll: true });
+    }
+
+    renderMarkdown(markdown) {
+        if (window.marked) {
+            marked.setOptions({
+                breaks: false,
+                gfm: true,
+                headerIds: false,
+                mangle: false,
+            });
+
+            const html = marked.parse(markdown);
+            return window.DOMPurify ? DOMPurify.sanitize(html) : html;
+        }
+
+        return this.basicMarkdownToHTML(markdown);
+    }
+
+    renderMath() {
+        if (!window.renderMathInElement) {
+            return;
+        }
+
+        renderMathInElement(this.content, {
+            delimiters: [
+                { left: "$$", right: "$$", display: true },
+                { left: "\\[", right: "\\]", display: true },
+                { left: "\\(", right: "\\)", display: false },
+                { left: "$", right: "$", display: false },
+            ],
+            throwOnError: false,
+        });
+    }
+
+    basicMarkdownToHTML(markdown) {
+        const escaped = markdown
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;");
+
+        return escaped
+            .replace(/^### (.*)$/gim, "<h3>$1</h3>")
+            .replace(/^## (.*)$/gim, "<h2>$1</h2>")
+            .replace(/^# (.*)$/gim, "<h1>$1</h1>")
+            .replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>")
+            .replace(/`([^`]+)`/g, "<code>$1</code>")
+            .replace(/^- (.*)$/gim, "<p>• $1</p>")
+            .replace(/\n{2,}/g, "</p><p>")
+            .replace(/^/, "<p>")
+            .replace(/$/, "</p>");
+    }
+}
