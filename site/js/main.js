@@ -54,7 +54,7 @@ class DocViewer {
         try {
             const markdown = await this.exporter.fetchDoc(url);
             this.content.innerHTML = this.renderMarkdown(markdown);
-            this.resolveDocLinks(url);
+            this.initDocLinks(url);
             this.renderMath();
         } catch (error) {
             console.error(error);
@@ -64,7 +64,7 @@ class DocViewer {
         this.content.focus({ preventScroll: true });
     }
 
-    resolveDocLinks(docUrl) {
+    initDocLinks(docUrl) {
         const parts = docUrl.split("/");
         parts.pop();
         const baseDir = parts.join("/");
@@ -74,7 +74,14 @@ class DocViewer {
             if (!href || href.startsWith("http://") || href.startsWith("https://") || href.startsWith("/") || href.startsWith("#") || href.startsWith("mailto:")) {
                 return;
             }
-            a.setAttribute("href", baseDir ? `${baseDir}/${href}` : href);
+
+            const resolved = baseDir ? `${baseDir}/${href}` : href;
+            a.setAttribute("href", resolved);
+
+            a.addEventListener("click", (e) => {
+                e.preventDefault();
+                this.open(resolved, a.textContent.trim() || "Документ");
+            });
         });
     }
 
