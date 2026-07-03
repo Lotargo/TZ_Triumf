@@ -6,23 +6,25 @@
 
 ## Системная архитектура
 
+> **Примечание:** FastAPI-слой (см. ниже) является проектной спецификацией (aspirational).
+> На текущем этапе пользовательский интерфейс — статический лендинг (`site/`),
+> пайплайн запускается через CLI (`python -m src.reconstruction.main`).
+> API-слой запланирован как следующий этап разработки.
+
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                        User Interface                          │
-│                      (HTML/CSS/JS + Three.js)                   │
-└─────────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                     API Layer (FastAPI)                         │
-│                   POST /api/reconstruct                         │
+│                     CLI / Static Site                           │
+│  ┌─────────────────┐  ┌────────────────────────────────────┐   │
+│  │ python -m       │  │  site/index.html + Three.js         │   │
+│  │ src.reconst...  │  │  (загружает готовые GLB)           │   │
+│  └─────────────────┘  └────────────────────────────────────┘   │
 └─────────────────────────────────────────────────────────────────┘
                               │
                               ▼
 ┌─────────────────────────────────────────────────────────────────┐
 │                  Reconstruction Pipeline                        │
 │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐         │
-│  │ Preprocessing│→ │    DECA      │→ │Postprocessing│         │
+│  │ Preprocessing│→ │ DECA/FLAME   │→ │Postprocessing│         │
 │  │  (OpenCV)    │  │  (PyTorch)   │  │  (NumPy)     │         │
 │  └──────────────┘  └──────────────┘  └──────────────┘         │
 └─────────────────────────────────────────────────────────────────┘
@@ -30,9 +32,9 @@
                               ▼
 ┌─────────────────────────────────────────────────────────────────┐
 │                     Output Formats                              │
-│  ┌─────────┐  ┌─────────┐  ┌─────────┐  ┌─────────┐          │
-│  │   OBJ   │  │   GLB   │  │   PLY   │  │   3D    │          │
-│  └─────────┘  └─────────┘  └─────────┘  └─────────┘          │
+│  ┌─────────┐  ┌─────────┐  ┌─────────┐                       │
+│  │   OBJ   │  │   GLB   │  │   PLY   │                       │
+│  └─────────┘  └─────────┘  └─────────┘                       │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -186,68 +188,26 @@ class MeshPostprocessor:
         )
 ```
 
-### 4. Visualization Module (`src/visualization/`)
+### 4. Visualization Module (`site/js/viewer.js`)
 
-Three.js визуализация в браузере.
+Three.js визуализация в браузере. Реализована как ES-модуль `FaceDemoViewer`
+в составе лендинга (`site/`). Поддерживает переключение между тремя моделями
+(DECA result, FLAME textured, FLAME neutral), orbit-управление, wireframe-режим,
+авто-вращение и скачивание GLB.
 
-```javascript
-// src/visualization/face_viewer.js
+> `src/visualization/` в Python-пакете — заглушка; вся визуализация вынесена
+> на сторону клиента (Three.js).
 
-class FaceViewer {
-    /**
-     * 3D визуализация лица
-     */
-    constructor(container) {
-        this.container = container;
-        this.scene = new THREE.Scene();
-        this.camera = new THREE.PerspectiveCamera(75, 1, 0.1, 1000);
-        this.renderer = new THREE.WebGLRenderer({ antialias: true });
-        
-        this.init();
-    }
-    
-    init() {
-        // Настройка рендерера
-        this.renderer.setSize(500, 500);
-        this.container.appendChild(this.renderer.domElement);
-        
-        // Освещение
-        const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
-        this.scene.add(ambientLight);
-        
-        const directionalLight = new THREE.DirectionalLight(0xffffff, 0.5);
-        directionalLight.position.set(1, 1, 1);
-        this.scene.add(directionalLight);
-        
-        // Камера
-        this.camera.position.z = 2;
-    }
-    
-    loadModel(glbUrl) {
-        /**
-         * Загрузка 3D-модели
-         */
-        const loader = new THREE.GLTFLoader();
-        
-        loader.load(glbUrl, (gltf) => {
-            this.model = gltf.scene;
-            this.scene.add(this.model);
-            
-            this.animate();
-        });
-    }
-    
-    animate() {
-        requestAnimationFrame(() => this.animate());
-        
-        if (this.model) {
-            this.model.rotation.y += 0.01;
-        }
-        
-        this.renderer.render(this.scene, this.camera);
-    }
-}
-```
+Основные возможности вьювера:
+
+- Загрузка GLB через `GLTFLoader` с автоматическим масштабированием и центрированием
+- Подсветка: `HemisphereLight` + 3 `DirectionalLight` (key, fill, rim)
+- OrbitControls с демпфированием (min/max distance 0.8–5)
+- Авто-вращение модели (`model.rotation.y += 0.0025`)
+- Переключение материала: текстурированные модели получают roughness/metalness
+  настройки, нейтральная — `MeshBasicMaterial` телесного цвета
+- Кнопки: Reset camera, Wireframe toggle, Download GLB
+- Адаптивный рендер с `devicePixelRatio`, capped at 2
 
 ## Данные
 
@@ -281,50 +241,18 @@ class ReconstructionResult:
         mesh.export(path, file_type='glb')
 ```
 
-## API
+## API (проектная спецификация)
 
-### FastAPI Server
+> **FastAPI-сервер не реализован в текущей версии.**  
+> Код ниже — архитектурный черновик (aspirational design). API-слой запланирован
+> как следующий этап: FastAPI-сервер с фото-аплоадом, очередью задач и WebSocket
+> для стриминга результатов.
 
 ```python
-# src/api/server.py
-
-from fastapi import FastAPI, UploadFile
-from fastapi.middleware.cors import CORSMiddleware
-from reconstruction import FaceReconstructor
-
-app = FastAPI(title="3D Face Reconstruction API")
-
-# CORS для Three.js
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-reconstructor = FaceReconstructor()
-
-@app.post("/api/reconstruct")
-async def reconstruct_face(image: UploadFile):
-    """
-    Реконструкция 3D-модели лица
-    
-    Принимает: изображение (JPEG/PNG)
-    Возвращает: GLB файл с 3D-моделью
-    """
-    # Сохранение временного файла
-    temp_path = f"temp/{image.filename}"
-    with open(temp_path, "wb") as f:
-        f.write(await image.read())
-    
-    # Реконструкция
-    result = reconstructor.reconstruct(temp_path)
-    
-    # Экспорт в GLB
-    output_path = f"output/{image.filename}.glb"
-    result.to_glb(output_path)
-    
-    return {"model_url": f"/output/{image.filename}.glb"}
+# Планируемый endpoint (не реализован)
+# POST /api/reconstruct
+#   Принимает: изображение (JPEG/PNG)
+#   Возвращает: GLB файл с 3D-моделью
 ```
 
 ## Потоки данных
@@ -370,7 +298,7 @@ async def reconstruct_face(image: UploadFile):
 - Python 3.10+
 - PyTorch 2.0+
 - OpenCV 4.8+
-- Node.js 18+ (для сборки Three.js)
+- Браузер с WebGL2 (для Three.js вьювера)
 
 ### Аппаратное обеспечение
 

@@ -6,7 +6,6 @@
 
 - **ОС:** Windows 10/11, macOS 12+, Ubuntu 20.04+
 - **Python:** 3.10 или выше
-- **Node.js:** 18 или выше (для веб-интерфейса)
 - **GPU:** Рекомендуется NVIDIA с CUDA (не обязательно)
 
 ### Установка зависимостей
@@ -14,7 +13,7 @@
 #### 1. Клонирование репозитория
 
 ```bash
-git clone https://github.com/BoikoOleg/TZ_Triumf.git
+git clone https://github.com/Lotargo/TZ_Triumf.git
 cd TZ_Triumf
 ```
 
@@ -155,15 +154,19 @@ python -m http.server 3000 -d site
 # http://localhost:3000
 ```
 
+Лендинг также доступен на GitHub Pages:
+[https://lotargo.github.io/TZ_Triumf/](https://lotargo.github.io/TZ_Triumf/)
+
 ## Использование
 
-### Загрузка изображения
+### Просмотр 3D-демо
 
-1. Откройте веб-интерфейс
-2. Нажмите "Upload Photo"
-3. Выберите фотографию лица (JPEG/PNG)
-4. Дождитесь обработки (1–3 секунды)
-5. Просмотрите 3D-модель
+На лендинге доступны три предсгенерированных GLB-модели для интерактивного просмотра:
+
+1. Откройте страницу в браузере
+2. Перейдите в секцию "3D-демо"
+3. Переключайтесь между моделями: DECA result, FLAME textured, FLAME neutral
+4. Управляйте вьювером: вращение, масштаб, wireframe, авто-вращение
 
 ### Управление 3D-моделью
 
@@ -220,23 +223,33 @@ python -c "import trimesh; print(trimesh.__version__)"
 
 ```
 TZ_Triumf/
-├── .venv/                   # Виртуальное окружение
-├── DECA/                    # Клонированный репозиторий DECA
+├── .venv/                            # Виртуальное окружение
+├── DECA/                             # Клонированный репозиторий DECA
 ├── src/
 │   ├── reconstruction/
-│   │   ├── __init__.py
-│   │   ├── face_reconstructor.py
-│   │   ├── preprocessor.py
-│   │   └── postprocessor.py
+│   │   ├── __init__.py               # Lazy imports
+│   │   ├── flame_decoder_2023.py     # Standalone LBS-декодер FLAME 2023
+│   │   ├── face_reconstructor.py     # Фасад: DECA + FLAME2023 режимы
+│   │   ├── preprocessor.py           # Детекция и выравнивание лица
+│   │   ├── postprocessor.py          # Очистка меша, экспорт OBJ/GLB/PLY
+│   │   ├── main.py                   # CLI точка входа
+│   │   ├── runtime_check.py          # Проверка окружения
+│   │   └── download_assets.py        # Загрузчик FLAME2020 с SHA256
 │   └── visualization/
-│       └── face_viewer.js
-├── site/
+│       └── __init__.py               # Stub (Python-визуализация отложена)
+├── site/                             # Лендинг (аналитический веб-отчёт)
 │   ├── index.html
-│   ├── css/
-│   └── js/
+│   ├── css/style.css
+│   ├── js/viewer.js                  # Three.js 3D-вьювер
+│   ├── js/main.js                    # Документ-вьювер
+│   ├── js/export.js                  # PDF и Markdown экспорт
+│   ├── models/                       # GLB-модели для демо
+│   └── assets/                       # Декоративные SVG
 ├── tests/
 ├── docs/
 ├── pyproject.toml
+├── .github/workflows/
+│   └── deploy-pages.yml              # CI/CD на GitHub Pages
 └── README.md
 ```
 
@@ -252,11 +265,12 @@ pytest
 ### Проверка качества
 
 ```bash
-# Запуск оценки качества
-python -m src.evaluation.run \
-    --input test_images/ \
-    --output results/ \
-    --metrics chamfer,normal_consistency
+# Diagnostics меша встроены в постпроцессинг:
+python -m src.reconstruction.main \
+    --input photo.jpg --output result.glb --mock --device cpu
+
+# Проверка готовности окружения к полноценной DECA-реконструкции:
+python -m src.reconstruction.main --check-env
 ```
 
 ## Дополнительные ресурсы
