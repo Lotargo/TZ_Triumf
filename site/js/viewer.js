@@ -4,13 +4,22 @@ import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 
 const MODELS = {
     deca: {
-        title: "DECA image-to-mesh textured",
+        title: "DECA three-view coarse",
         description:
-            "Реконструкция по входному фото через DECA/FLAME2020 на CUDA с DECA standard rasterizer. GLB содержит coarse mesh и UV-текстуру, извлеченную из изображения.",
+            "Экспериментальная сборка из трех проекций: общий identity shape усреднен по фронту и двум профилям, global pose обнулен для стабильного просмотра, текстура взята с фронтального кадра.",
         url: "models/deca_result.glb",
         vertices: "5023",
         faces: "9975",
         format: "GLB / TextureVisuals",
+    },
+    "deca-detail": {
+        title: "DECA three-view detail",
+        description:
+            "High-detail экспорт через официальный DECA displacement upsample. Цветовая маска отключена, чтобы оценивать только плотную геометрию и микродетали без артефактов UV-проекции.",
+        url: "models/deca_detail_neutral.glb",
+        vertices: "59315",
+        faces: "117380",
+        format: "GLB / ColorVisuals",
     },
     "flame-textured": {
         title: "FLAME2023 textured baseline",
@@ -21,6 +30,15 @@ const MODELS = {
         faces: "9976",
         format: "GLB / TextureVisuals",
     },
+    "flame-mask-baseline": {
+        title: "FLAME2023 mask baseline",
+        description:
+            "Та же FLAME2023 Open сетка на 5k вершин, но mean texture запечена в vertex colors. Это стабильный baseline для просмотра FLAME texture-space маски без UV/PBR артефактов.",
+        url: "models/flame2023_mask_baseline.glb",
+        vertices: "5023",
+        faces: "9976",
+        format: "GLB / VertexColors",
+    },
     "flame-neutral": {
         title: "FLAME2023 neutral mesh",
         description:
@@ -28,6 +46,24 @@ const MODELS = {
         url: "models/flame2023_neutral.glb",
         vertices: "5023",
         faces: "9976",
+        format: "GLB / ColorVisuals",
+    },
+    "flame-detail-textured": {
+        title: "FLAME2023 textured detail",
+        description:
+            "Уплотненный FLAME2023 Open baseline с сохраненной UV-разверткой и mean texture. Это subdivision-детализация без нейросетевого displacement-слоя.",
+        url: "models/flame2023_detail_textured.glb",
+        vertices: "59856",
+        faces: "39904",
+        format: "GLB / TextureVisuals",
+    },
+    "flame-detail-neutral": {
+        title: "FLAME2023 detail mesh",
+        description:
+            "Та же уплотненная FLAME2023 Open геометрия без текстуры. Нужна для сравнения coarse/detail топологии FLAME отдельно от материала.",
+        url: "models/flame2023_detail_neutral.glb",
+        vertices: "59856",
+        faces: "39904",
         format: "GLB / ColorVisuals",
     },
 };
@@ -67,6 +103,8 @@ class FaceDemoViewer {
         this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
         this.renderer.setSize(width, height);
         this.renderer.outputColorSpace = THREE.SRGBColorSpace;
+        this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+        this.renderer.toneMappingExposure = 1.08;
         this.container.appendChild(this.renderer.domElement);
 
         this.controls = new OrbitControls(this.camera, this.renderer.domElement);
@@ -74,6 +112,9 @@ class FaceDemoViewer {
         this.controls.dampingFactor = 0.08;
         this.controls.minDistance = 0.8;
         this.controls.maxDistance = 5;
+
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.78);
+        this.scene.add(ambientLight);
 
         const hemiLight = new THREE.HemisphereLight(0xffffff, 0xd8e7fb, 1.35);
         this.scene.add(hemiLight);
@@ -137,17 +178,38 @@ class FaceDemoViewer {
                     }
                     child.castShadow = false;
                     child.receiveShadow = false;
+                    if (child.geometry) {
+                        child.geometry.computeVertexNormals();
+                        child.geometry.normalizeNormals();
+                    }
                     const preserveTexture =
-                        (id === "flame-textured" || id === "deca") && Boolean(child.material?.map);
+                        (id === "flame-textured"
+                            || id === "flame-detail-textured"
+                            || id === "deca") && Boolean(child.material?.map);
+                    const preserveVertexColors = id === "flame-mask-baseline";
                     if (!preserveTexture) {
-                        child.material = new THREE.MeshBasicMaterial({
-                            color: 0xc98f78,
+                        child.material = new THREE.MeshPhongMaterial({
+                            color: preserveVertexColors ? 0xffffff : 0xc98f78,
+                            emissive: preserveVertexColors ? 0x181818 : 0x241510,
+                            specular: 0x4a4a4a,
+                            shininess: 24,
+                            vertexColors: preserveVertexColors,
                             side: THREE.DoubleSide,
                         });
                     } else {
-                        child.material.side = THREE.DoubleSide;
-                        child.material.roughness = 0.82;
-                        child.material.metalness = 0.02;
+                        const textureMap = child.material.map;
+                        if (textureMap) {
+                            textureMap.colorSpace = THREE.SRGBColorSpace;
+                            textureMap.needsUpdate = true;
+                        }
+                        child.material = new THREE.MeshPhongMaterial({
+                            map: textureMap,
+                            color: 0xffffff,
+                            emissive: 0x1d1d1d,
+                            specular: 0x505050,
+                            shininess: 18,
+                            side: THREE.DoubleSide,
+                        });
                     }
                     child.material.needsUpdate = true;
                 });

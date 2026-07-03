@@ -633,7 +633,9 @@ class FaceReconstructor:
             return None, None, None
 
         data = np.load(texture_file)
-        texture = np.clip(data["mean"], 0, 255).astype(np.uint8)
+        # FLAME_texture.npz stores the mean texture in BGR order. Pillow,
+        # trimesh, and browser GLB viewers expect RGB.
+        texture = np.clip(data["mean"], 0, 255).astype(np.uint8)[:, :, ::-1]
         uv = data["vt"].astype(np.float32)
         uv_faces = data["ft"].astype(np.int64)
         return texture, uv, uv_faces
