@@ -13,8 +13,14 @@ DECA подключается как внешний каталог `DECA/` в к
 - Python-зависимости для запуска DECA установлены;
 - `data/generic_model.pkl` можно скачать через `src.reconstruction.download_assets`
   из Hugging Face-зеркала с проверкой SHA256.
-- CPU image-to-mesh запуск проверен в mesh-only режиме без PyTorch3D:
+- CPU image-to-mesh запуск проверен в mesh-only режиме без renderer:
   `outputs/deca_result.glb` создаётся из `DECA/TestSamples/examples/IMG_0392_inputs.jpg`.
+- CUDA image-to-mesh запуск проверен через DECA `standard` rasterizer:
+  `site/models/deca_result.glb` создаётся с renderer path и UV texture.
+- Добавлена проверка готовности full renderer path:
+  `python -m src.reconstruction.main --check-env`.
+- Постпроцессинг больше не сглаживает вершины по индексу по умолчанию; вместо
+  этого результат получает `mesh_diagnostics` с проверками faces/UV/topology.
 
 `generic_model.pkl` относится к FLAME2020 и не должен распространяться в
 репозитории. Перед использованием нужно учитывать лицензионные условия FLAME.
@@ -93,3 +99,15 @@ python -m src.reconstruction.main \
   --mock \
   --no-texture
 ```
+
+Проверка готовности GPU/CUDA renderer окружения:
+
+```bash
+python -m src.reconstruction.main --check-env
+```
+
+На текущем окружении команда показывает `full renderer path: ready`: CUDA-сборка
+PyTorch установлена, а DECA `standard_rasterize_cuda` extension собран. PyTorch3D
+не обязателен для этого запуска, хотя остаётся альтернативным renderer backend.
+
+Подробнее: [`deca-flame-verification.md`](deca-flame-verification.md).

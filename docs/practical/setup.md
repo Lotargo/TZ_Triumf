@@ -74,6 +74,16 @@ pip install chumpy --no-build-isolation
 
 Подробности и статус интеграции: [`deca-integration.md`](deca-integration.md).
 
+Проверить, готово ли окружение к полноценному DECA renderer path:
+
+```bash
+python -m src.reconstruction.main --check-env
+```
+
+Для персональной текстуры с фото и detail normals нужны CUDA-сборка PyTorch,
+PyTorch3D или рабочий DECA rasterizer, `deca_model.tar`, `generic_model.pkl` и
+`head_template.obj`.
+
 #### 4. Веб-интерфейс (опционально)
 
 ```bash
@@ -97,6 +107,9 @@ python -m src.reconstruction.main \
     --output outputs/deca_result.glb \
     --device cpu \
     --no-texture
+
+# Проверка готовности full DECA renderer path
+python -m src.reconstruction.main --check-env
 
 # Реконструкция с настройками
 python -m src.reconstruction.main \

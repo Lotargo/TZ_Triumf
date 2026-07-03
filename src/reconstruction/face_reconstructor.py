@@ -260,6 +260,7 @@ class FaceReconstructor:
         self.device = torch.device(device)
         self.model_path = model_path
         self.use_mock = use_mock
+        self.deca_mesh_only = False
         
         # Initialize components
         self.preprocessor = FacePreprocessor(device=str(self.device))
@@ -277,6 +278,7 @@ class FaceReconstructor:
         """
         if self.use_mock:
             print("Using mock model for reproducible local demo.")
+            self.deca_mesh_only = True
             return MockDECA()
 
         # --- FLAME 2023 path: standalone parametric decoder ---
@@ -296,8 +298,24 @@ class FaceReconstructor:
             from decalib.utils.config import cfg as deca_cfg
 
             albedo_path = deca_root / "data" / "FLAME_albedo_from_BFM.npz"
-            mesh_only = find_spec("pytorch3d") is None
+            standard_rasterizer = next(
+                (deca_root / "decalib" / "utils" / "rasterizer").glob(
+                    "standard_rasterize_cuda*.pyd"
+                ),
+                None,
+            )
+            if find_spec("pytorch3d") is not None:
+                rasterizer_type = "pytorch3d"
+            elif standard_rasterizer is not None:
+                rasterizer_type = "standard"
+            else:
+                rasterizer_type = None
+            mesh_only = rasterizer_type is None
+            self.deca_mesh_only = mesh_only
             deca_cfg.model.use_tex = albedo_path.exists()
+            deca_cfg.model.extract_tex = True
+            if rasterizer_type is not None:
+                deca_cfg.rasterizer_type = rasterizer_type
             deca_cfg.model.topology_path = str(deca_root / "data" / "head_template.obj")
             deca_cfg.model.mano_path = "data"
             deca_cfg.model.flame_path = "data"
@@ -309,10 +327,13 @@ class FaceReconstructor:
                 )
             if mesh_only:
                 print(
-                    "DECA renderer disabled: pytorch3d is not installed; "
-                    "mesh-only inference will be used.",
+                    "DECA renderer disabled: neither pytorch3d nor the "
+                    "standard rasterizer extension is available; mesh-only "
+                    "inference will be used.",
                     flush=True,
                 )
+            else:
+                print(f"DECA renderer enabled: {rasterizer_type}", flush=True)
 
             original_torch_load = torch.load
             original_setup_renderer = DECA._setup_renderer
@@ -442,37 +463,71 @@ class FaceReconstructor:
         if not image_path.exists():
             raise FileNotFoundError(f"Image not found: {image_path}")
 
-        # Preprocess image
-        input_tensor = self.preprocessor.process(str(image_path))
+        input_tensor = self._preprocess_for_deca(image_path)
 
-        # Run DECA inference
+        renderer_available = (
+            not self.deca_mesh_only
+            and hasattr(self.model, "render")
+            and hasattr(self.model.render, "faces")
+        )
+        use_detail = renderer_available and detail_level != "low"
+        return_vis = renderer_available and with_texture
+
         with torch.no_grad():
-            with torch.no_grad():
-                codedict = self.model.encode(input_tensor)
-                opdict = self.model.decode(
-                    codedict,
-                    rendering=False,
-                    vis_lmk=False,
-                    return_vis=False,
-                    use_detail=False,
-                )
+            codedict = self.model.encode(input_tensor, use_detail=use_detail)
+            decoded = self.model.decode(
+                codedict,
+                rendering=renderer_available,
+                vis_lmk=renderer_available,
+                return_vis=return_vis,
+                use_detail=use_detail,
+            )
+            if return_vis:
+                opdict, _visdict = decoded
+            else:
+                opdict = decoded
 
             vertices = opdict["verts"][0].cpu().numpy()
-            if hasattr(self.model, "faces"):
+            if renderer_available:
+                faces = self.model.render.faces[0].cpu().numpy()
+            elif hasattr(self.model, "faces"):
                 faces = self.model.faces.cpu().numpy()
             else:
                 faces = self.model.render.faces[0].cpu().numpy()
-            texture = opdict.get("tex_image", None)
+
+            texture_tensor = opdict.get("uv_texture_gt")
+            if texture_tensor is None:
+                texture_tensor = opdict.get("uv_texture")
+            texture = texture_tensor
             if texture is not None:
                 texture = texture[0].permute(1, 2, 0).cpu().numpy()
                 texture = (texture * 255).astype(np.uint8)
             if not with_texture:
                 texture = None
 
+            uv = None
+            uv_faces = None
+            if texture is not None and renderer_available:
+                uv = self.model.render.raw_uvcoords[0].cpu().numpy()
+                uv_faces = self.model.render.uvfaces[0].cpu().numpy()
+
             params = {
                 "shape": codedict["shape"].cpu().numpy(),
                 "expression": codedict["exp"].cpu().numpy(),
                 "pose": codedict["pose"].cpu().numpy(),
+                "backend": {
+                    "flame_model": self.flame_model,
+                    "renderer_available": renderer_available,
+                    "mesh_only": self.deca_mesh_only,
+                    "use_detail": use_detail,
+                    "texture_source": (
+                        "deca_uv_texture_gt"
+                        if texture is not None and "uv_texture_gt" in opdict
+                        else "deca_uv_texture"
+                        if texture is not None
+                        else None
+                    ),
+                },
             }
 
         # Postprocess
@@ -480,12 +535,24 @@ class FaceReconstructor:
             vertices=vertices,
             faces=faces,
             texture=texture,
+            uv=uv,
+            uv_faces=uv_faces,
             params=params,
         )
 
         result = self.postprocessor.process(result)
 
         return result
+
+    def _preprocess_for_deca(self, image_path: Path):
+        """Use DECA's official test transform when the DECA package is present."""
+        try:
+            from decalib.datasets import datasets
+
+            testdata = datasets.TestData(str(image_path), iscrop=False)
+            return testdata[0]["image"].to(self.device)[None, ...]
+        except Exception:
+            return self.preprocessor.process(str(image_path))
 
     def generate(
         self,
@@ -619,12 +686,16 @@ class MockDECA:
     def __init__(self):
         self.faces = _make_mock_faces()
 
-    def encode(self, tensor):
-        return {
+    def encode(self, tensor, use_detail=True):
+        codedict = {
             "shape": torch.zeros((1, 300), dtype=torch.float32),
             "exp": torch.zeros((1, 100), dtype=torch.float32),
             "pose": torch.zeros((1, 15), dtype=torch.float32),
+            "images": tensor,
         }
+        if use_detail:
+            codedict["detail"] = torch.zeros((1, 128), dtype=torch.float32)
+        return codedict
 
     def decode(self, codedict, **kwargs):
         verts, _ = _make_mock_mesh()

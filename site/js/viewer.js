@@ -4,13 +4,13 @@ import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 
 const MODELS = {
     deca: {
-        title: "DECA image-to-mesh",
+        title: "DECA image-to-mesh textured",
         description:
-            "Mesh-only реконструкция по входному фото через DECA/FLAME2020 на CPU. Рендерер PyTorch3D отключается, но геометрия экспортируется в валидный GLB.",
+            "Реконструкция по входному фото через DECA/FLAME2020 на CUDA с DECA standard rasterizer. GLB содержит coarse mesh и UV-текстуру, извлеченную из изображения.",
         url: "models/deca_result.glb",
         vertices: "5023",
-        faces: "9976",
-        format: "GLB / ColorVisuals",
+        faces: "9975",
+        format: "GLB / TextureVisuals",
     },
     "flame-textured": {
         title: "FLAME2023 textured baseline",
@@ -137,7 +137,8 @@ class FaceDemoViewer {
                     }
                     child.castShadow = false;
                     child.receiveShadow = false;
-                    const preserveTexture = id === "flame-textured" && Boolean(child.material?.map);
+                    const preserveTexture =
+                        (id === "flame-textured" || id === "deca") && Boolean(child.material?.map);
                     if (!preserveTexture) {
                         child.material = new THREE.MeshBasicMaterial({
                             color: 0xc98f78,

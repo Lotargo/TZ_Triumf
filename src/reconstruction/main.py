@@ -78,12 +78,25 @@ def build_parser() -> argparse.ArgumentParser:
         help="Generate a neutral parametric FLAME mesh instead of reconstructing from an image"
     )
 
+    parser.add_argument(
+        "--check-env",
+        action="store_true",
+        help="Check CUDA/PyTorch3D/DECA asset readiness and exit"
+    )
+
     return parser
 
 
 def main():
     parser = build_parser()
     args = parser.parse_args()
+
+    if args.check_env:
+        from .runtime_check import collect_runtime_report, format_runtime_report
+
+        report = collect_runtime_report()
+        print(format_runtime_report(report))
+        raise SystemExit(0 if report["full_deca_renderer_ready"] else 1)
 
     from .face_reconstructor import FaceReconstructor
     
