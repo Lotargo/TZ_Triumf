@@ -12,6 +12,17 @@ const MODELS = {
         faces: "9975",
         format: "GLB / TextureVisuals",
     },
+    "deca-baked-detail": {
+        title: "DECA baked detail",
+        description:
+            "Coarse 5k DECA mesh с сохраненной текстурой и baked normal/bump maps из DECA detail-прохода. Проверяет production-подход: легкая геометрия плюс микрорельеф в материале.",
+        url: "models/deca_baked_detail.glb",
+        normalMap: "models/deca_baked_normal.png",
+        bumpMap: "models/deca_baked_height.png",
+        vertices: "5023",
+        faces: "9975",
+        format: "GLB / Texture + NormalMap",
+    },
     "deca-detail": {
         title: "DECA three-view detail",
         description:
@@ -82,6 +93,7 @@ class FaceDemoViewer {
         this.wireframeButton = document.getElementById("viewer-wireframe");
         this.resetButton = document.getElementById("viewer-reset");
         this.loader = new GLTFLoader();
+        this.textureLoader = new THREE.TextureLoader();
         this.model = null;
         this.wireframe = false;
         this.animationFrame = null;
@@ -185,8 +197,10 @@ class FaceDemoViewer {
                     const preserveTexture =
                         (id === "flame-textured"
                             || id === "flame-detail-textured"
+                            || id === "deca-baked-detail"
                             || id === "deca") && Boolean(child.material?.map);
-                    const preserveVertexColors = id === "flame-mask-baseline";
+                    const preserveVertexColors =
+                        id === "flame-mask-baseline";
                     if (!preserveTexture) {
                         child.material = new THREE.MeshPhongMaterial({
                             color: preserveVertexColors ? 0xffffff : 0xc98f78,
@@ -202,14 +216,27 @@ class FaceDemoViewer {
                             textureMap.colorSpace = THREE.SRGBColorSpace;
                             textureMap.needsUpdate = true;
                         }
-                        child.material = new THREE.MeshPhongMaterial({
+                        const materialOptions = {
                             map: textureMap,
                             color: 0xffffff,
                             emissive: 0x1d1d1d,
                             specular: 0x505050,
                             shininess: 18,
                             side: THREE.DoubleSide,
-                        });
+                        };
+                        if (modelInfo.normalMap) {
+                            const normalMap = this.textureLoader.load(modelInfo.normalMap);
+                            normalMap.colorSpace = THREE.NoColorSpace;
+                            materialOptions.normalMap = normalMap;
+                            materialOptions.normalScale = new THREE.Vector2(0.55, 0.55);
+                        }
+                        if (modelInfo.bumpMap) {
+                            const bumpMap = this.textureLoader.load(modelInfo.bumpMap);
+                            bumpMap.colorSpace = THREE.NoColorSpace;
+                            materialOptions.bumpMap = bumpMap;
+                            materialOptions.bumpScale = 0.018;
+                        }
+                        child.material = new THREE.MeshPhongMaterial(materialOptions);
                     }
                     child.material.needsUpdate = true;
                 });

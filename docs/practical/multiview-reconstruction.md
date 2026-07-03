@@ -16,6 +16,8 @@ The current browser `DECA result` is a coarse FLAME-topology mesh:
 - global pose reset to zero for stable preview
 - UV texture extracted in the original front-view pose, then applied to the
   neutral/global-zero preview mesh
+- `DECA baked detail` keeps the same 5,023-vertex mesh but adds normal and bump
+  maps baked from the DECA detail pass.
 
 The official DECA detail path upsamples the mesh from the displacement map:
 
@@ -51,6 +53,23 @@ make real displacement visible, but they also expose every texture seam,
 projection mismatch, and generative artifact. The landing demo should therefore
 keep both coarse and detail variants.
 
+The most useful production-oriented compromise is:
+
+```text
+coarse mesh + albedo/baseColor + baked normal map + optional height/bump map
+```
+
+This keeps the model light enough for browser/real-time use while allowing the
+detail branch to contribute shading-level microgeometry. It also avoids the
+main failure mode of dense vertex-color exports: the dense mesh reveals every
+projection and texture artifact. The first spike exports:
+
+- `site/models/deca_baked_detail.glb` — same coarse DECA geometry as
+  `DECA result`;
+- `site/models/deca_baked_normal.png` — UV normal map from DECA detail normals;
+- `site/models/deca_baked_height.png` — normalized DECA displacement map used as
+  a subtle bump map in Three.js.
+
 It is not meaningful to substantially increase triangle count while keeping the
 FLAME mesh at 5k-6k vertices. A clean triangular head mesh already has roughly
 two faces per vertex, so the coarse FLAME topology is close to that practical
@@ -77,6 +96,14 @@ The failed UV-fusion assets are intentionally removed from the landing demo so
 the page does not imply that visibility-weighted UV blending is the chosen
 production path.
 
+The later `DECA + FLAME mask` spike is also intentionally removed. It baked a
+FLAME texture-space mask directly into DECA vertex colors and exposed the core
+problem: FLAME and DECA preview geometry can share a broad head prior, but their
+texture/UV assumptions are not interchangeable without an explicit UV remap.
+The result looked like a spatially desynchronized mask rather than a clean face
+texture. Increasing or decreasing polygon count does not fix that mismatch; it
+only changes how visible the interpolation artifacts are.
+
 ## Texture and mask caveat
 
 DECA extracts `uv_texture_gt` by projecting the currently decoded mesh back into
@@ -92,6 +119,18 @@ mask. DECA's built-in `uv_face_eye_mask` is a UV face/eye prior, not semantic
 segmentation of skin, hair, ears, neck, background, and occluders. A production
 texture pass needs a separate segmentation/visibility pipeline before fusing
 colors into UV space.
+
+The project direction is therefore 2D/UV-first for masks:
+
+```text
+semantic image masks -> visibility-aware projection -> target UV texture
+                    -> material maps on the chosen mesh
+```
+
+If a mask is authored in FLAME UV space and the target mesh uses a DECA/export
+UV layout, the required operation is not vertex-color transfer. It is a
+texture-space bake/remap into the target UV layout, ideally with visibility,
+occlusion and seam handling.
 
 The first runtime UV-fusion experiment followed DECA's own training hint:
 

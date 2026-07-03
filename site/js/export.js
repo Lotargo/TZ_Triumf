@@ -9,6 +9,8 @@ class DocExporter {
             "docs/research/05-photogrammetry.md",
             "docs/research/06-domain-gap.md",
             "docs/research/07-comparison.md",
+            "docs/research/08-comfyui-masks-meshes.md",
+            "docs/research/09-game-face-textures-masks.md",
             "docs/practical/architecture.md",
         ];
     }

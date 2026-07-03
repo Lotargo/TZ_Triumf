@@ -240,7 +240,7 @@ def measure_domain_impact(model, ideal_dataset, real_dataset):
 
 ## Practical Recommendations
 
-### Для тестового задания
+### Для первого рабочего прототипа
 
 **Рекомендуемый pipeline:**
 
@@ -251,8 +251,8 @@ def measure_domain_impact(model, ideal_dataset, real_dataset):
 **Обоснование:**
 1. Минимальные требования к входу (1 фото)
 2. Быстрый результат
-3. Демонстрирует understanding of ML pipeline
-4. Показывает практические навыки
+3. Дает понятный baseline для сравнения следующих итераций
+4. Быстро связывает ML-часть с browser preview
 
 ### Для production
 

@@ -3,8 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>3D-реконструкция лица по фото | аналитический отчет</title>
-    <meta name="description" content="Веб-документ по стратегии 3D-реконструкции лица по фотографиям: обзор методов, сравнение подходов, риски и рекомендуемый ML-пайплайн.">
+    <title>3D-реконструкция лица по фото | проектная документация</title>
+    <meta name="description" content="Проектная документация по 3D-реконструкции лица: DECA/FLAME pipeline, WebGL preview, текстуры, маски, риски и дальнейшее развитие.">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@600;700;800;900&display=swap" rel="stylesheet">
@@ -33,10 +33,10 @@
     <main>
         <section id="summary" class="hero section">
             <div class="hero-copy">
-                <p class="eyebrow">Тестовое задание · аналитический веб-документ</p>
+                <p class="eyebrow">Project docs · research and prototype</p>
                 <h1>Стратегия 3D-реконструкции лица по фото</h1>
                 <p class="lead">
-                    Цель проекта — показать исследовательскую логику ML-разработчика: разобрать современные подходы, сравнить их ограничения и предложить реалистичный пайплайн для генерации лица цифрового манекена в браузерной 3D-экосистеме.
+                    Проект объединяет исследование, Python-пайплайн и браузерный просмотрщик для проверки 3D-реконструкции лица по 1-3 фото, с фокусом на стабильную топологию, UV-текстуры, маски и web-ready GLB-экспорт.
                 </p>
                 <div class="actions">
                     <button class="btn primary btn-view-doc" type="button" data-doc-url="docs/report.md" data-doc-title="Основной отчет">Просмотреть отчет</button>
@@ -92,6 +92,7 @@
                 <div class="viewer-shell">
                     <div class="viewer-toolbar" aria-label="Выбор модели">
                         <button class="model-tab" type="button" data-model-id="deca">DECA result</button>
+                        <button class="model-tab" type="button" data-model-id="deca-baked-detail">DECA baked detail</button>
                         <button class="model-tab" type="button" data-model-id="deca-detail">DECA detail</button>
                         <button class="model-tab" type="button" data-model-id="flame-textured">FLAME textured</button>
                         <button class="model-tab" type="button" data-model-id="flame-mask-baseline">FLAME mask</button>
@@ -262,6 +263,14 @@
                         <button class="doc-open btn-view-doc" type="button" data-doc-url="docs/practical/architecture.md" data-doc-title="Практическая архитектура"><span>08</span> Практическая архитектура</button>
                         <a href="docs/practical/architecture.md" download>MD</a>
                     </article>
+                    <article class="doc-item">
+                        <button class="doc-open btn-view-doc" type="button" data-doc-url="docs/research/08-comfyui-masks-meshes.md" data-doc-title="ComfyUI, маски и меши"><span>09</span> ComfyUI и маски</button>
+                        <a href="docs/research/08-comfyui-masks-meshes.md" download>MD</a>
+                    </article>
+                    <article class="doc-item">
+                        <button class="doc-open btn-view-doc" type="button" data-doc-url="docs/research/09-game-face-textures-masks.md" data-doc-title="Игровой пайплайн текстур лица"><span>10</span> Game face textures</button>
+                        <a href="docs/research/09-game-face-textures-masks.md" download>MD</a>
+                    </article>
                 </div>
             </div>
         </section>
@@ -285,7 +294,7 @@
     </div>
 
     <footer class="footer">
-        <span>Аналитический отчет для тестового задания · 2026</span>
+        <span>3D Face Reconstruction project · 2026</span>
         <a class="github-link" href="https://github.com/Lotargo/TZ_Triumf" aria-label="Открыть репозиторий Lotargo/TZ_Triumf на GitHub">
             <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
                 <path fill="currentColor" d="M12 2C6.48 2 2 6.58 2 12.26c0 4.53 2.87 8.37 6.84 9.73.5.1.68-.22.68-.49 0-.24-.01-1.04-.01-1.89-2.78.62-3.37-1.22-3.37-1.22-.45-1.19-1.11-1.5-1.11-1.5-.91-.64.07-.63.07-.63 1 .07 1.53 1.06 1.53 1.06.89 1.57 2.34 1.12 2.91.86.09-.66.35-1.12.63-1.37-2.22-.26-4.56-1.14-4.56-5.07 0-1.12.39-2.03 1.03-2.75-.1-.26-.45-1.3.1-2.71 0 0 .84-.28 2.75 1.05A9.3 9.3 0 0 1 12 7c.85 0 1.7.12 2.5.34 1.9-1.33 2.74-1.05 2.74-1.05.55 1.41.2 2.45.1 2.71.64.72 1.03 1.63 1.03 2.75 0 3.94-2.34 4.8-4.57 5.06.36.32.68.94.68 1.9 0 1.37-.01 2.47-.01 2.8 0 .27.18.59.69.49A10.08 10.08 0 0 0 22 12.26C22 6.58 17.52 2 12 2Z"/>
@@ -308,6 +317,6 @@
     </script>
     <script src="js/export.js"></script>
     <script src="js/main.js"></script>
-    <script type="module" src="js/viewer.js?v=7"></script>
+    <script type="module" src="js/viewer.js?v=11"></script>
 </body>
 </html>
