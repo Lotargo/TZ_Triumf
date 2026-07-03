@@ -54,6 +54,7 @@ class DocViewer {
         try {
             const markdown = await this.exporter.fetchDoc(url);
             this.content.innerHTML = this.renderMarkdown(markdown);
+            this.resolveDocLinks(url);
             this.renderMath();
         } catch (error) {
             console.error(error);
@@ -61,6 +62,20 @@ class DocViewer {
         }
 
         this.content.focus({ preventScroll: true });
+    }
+
+    resolveDocLinks(docUrl) {
+        const parts = docUrl.split("/");
+        parts.pop();
+        const baseDir = parts.join("/");
+
+        this.content.querySelectorAll("a[href]").forEach((a) => {
+            const href = a.getAttribute("href");
+            if (!href || href.startsWith("http://") || href.startsWith("https://") || href.startsWith("/") || href.startsWith("#") || href.startsWith("mailto:")) {
+                return;
+            }
+            a.setAttribute("href", baseDir ? `${baseDir}/${href}` : href);
+        });
     }
 
     close() {
