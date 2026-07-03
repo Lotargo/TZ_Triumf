@@ -11,3 +11,4 @@ build/
 .playwright-mcp
 Описание.md
 outputs/
+site/docs/

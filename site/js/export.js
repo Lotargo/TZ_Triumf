@@ -1,15 +1,15 @@
 class DocExporter {
     constructor() {
         this.docs = [
-            "../docs/report.md",
-            "../docs/research/01-overview.md",
-            "../docs/research/02-3dmm.md",
-            "../docs/research/03-nerf.md",
-            "../docs/research/04-deep-learning.md",
-            "../docs/research/05-photogrammetry.md",
-            "../docs/research/06-domain-gap.md",
-            "../docs/research/07-comparison.md",
-            "../docs/practical/architecture.md",
+            "docs/report.md",
+            "docs/research/01-overview.md",
+            "docs/research/02-3dmm.md",
+            "docs/research/03-nerf.md",
+            "docs/research/04-deep-learning.md",
+            "docs/research/05-photogrammetry.md",
+            "docs/research/06-domain-gap.md",
+            "docs/research/07-comparison.md",
+            "docs/practical/architecture.md",
         ];
     }
 
@@ -37,7 +37,7 @@ class DocExporter {
 
     async generatePDF() {
         try {
-            const markdown = await this.fetchDoc("../docs/report.md");
+            const markdown = await this.fetchDoc("docs/report.md");
             const printWindow = window.open("", "_blank");
             printWindow.document.write(this.wrapPrintableHtml(this.markdownToHTML(markdown)));
             printWindow.document.close();
